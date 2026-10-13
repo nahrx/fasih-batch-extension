@@ -13,13 +13,16 @@
  *     remarks:  [{ dataKey, key?, title?, width? }],   // opsional; kolom remark muncul saat toggle Remark aktif
  *     validateRow(row)  -> null | 'pesan' | { kolom: 'pesan' },
  *     before(rows, ctx), after(results, ctx),            // opsional
- *     async process(row, ctx) -> { skip?, status?, code?, ket? },
+ *     async process(row, ctx) -> { skip?, status?, code?, ket?, remarkKeys? },
  *   })
- *   ctx = { dryRun, options, FASIH, index, total, rowNumber, sleep }
+ *   ctx = { dryRun, options, FASIH, index, total, rowNumber, sleep, remarks }
  *
  * Remark: kalau toggle Remark aktif, tiap sel remark yang terisi ditulis sebagai catatan
  * per-pertanyaan lewat FASIH.setComment(id, dataKey, teks) setelah process() berhasil
  * (bukan LEWATI/GAGAL). Teks yang sama persis di dataKey itu tidak ditulis dua kali.
+ * ctx.remarks = remark terisi di baris itu [{ dataKey, text }] ([] kalau toggle mati).
+ * Field roster (dataKey#n): process() mengembalikan remarkKeys { dataKey: 'dataKey#n' }
+ * supaya catatan ditulis ke baris yang benar, mis. { nama_usaha: 'nama_usaha#1001' }.
  *
  * Kode script dijalankan dengan AsyncFunction (butuh 'unsafe-eval' di CSP halaman);
  * kalau CSP menolak, dijalankan lewat chrome.userScripts (bridge.js + background.js).
@@ -446,9 +449,11 @@
 
   /* Tulis remark lewat FASIH.setComment (satu submit per remark). Teks yang sudah ada
      persis di dataKey yang sama dilewati supaya LIVE ulang tidak menggandakan catatan. */
-  async function applyRemarks(id, list, dry) {
+  async function applyRemarks(id, list, dry, remarkKeys = null) {
     const out = [];
-    for (const { dataKey, text } of list) {
+    for (const rm of list) {
+      const text = rm.text;
+      const dataKey = (remarkKeys && remarkKeys[rm.dataKey]) || rm.dataKey;   // mis. nama_usaha -> nama_usaha#1001
       const asg = await F().getAssignment(id);
       let notes = [];
       try { notes = JSON.parse(asg.comment || '{}').notes || []; } catch {}
@@ -507,11 +512,11 @@
         setStatus(r, 'PROSES…');
         msg(`${dry ? 'Dry run' : 'LIVE'} ${i + 1}/${targets.length}${m.idColumn ? ` — ${item[m.idColumn]}` : ''}`);
         try {
-          const res = (await m.process(item, { ...ctx, index: i, rowNumber: r + 1 })) || {};
+          const res = (await m.process(item, { ...ctx, index: i, rowNumber: r + 1, remarks })) || {};
           let status = res.status || (res.skip ? 'LEWATI' : dry ? 'DRY RUN' : 'OK'), ket = res.ket;
           if (remarks.length && !res.skip && status !== 'GAGAL') {
             try {
-              const done = await applyRemarks(item[m.idColumn], remarks, dry);
+              const done = await applyRemarks(item[m.idColumn], remarks, dry, res.remarkKeys);
               ket = [ket, `remark: ${done.join(', ')}`].filter(Boolean).join(' · ');
             } catch (e) {
               status = 'GAGAL';

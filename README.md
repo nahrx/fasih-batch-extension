@@ -85,10 +85,10 @@ FASIH_BATCH.register({
 - Kolom: `{ key, title?, type?, required?, unique?, width?, mono?, trim? }`. `key` tidak boleh diawali `_` (dipakai panel untuk status/keterangan). `title` mengganti judul kolom, `width` lebar dalam px, `mono` font monospace, `trim` buang spasi di awal/akhir (default aktif kecuali `text`).
 - `type`: `text` (default), `uuid`, `number`, `integer`. Nilai `number`/`integer` sampai ke `process` sudah dalam bentuk Number (sel kosong = `null`).
 - Opsi toolbar: `{ key, label, type: 'checkbox'|'number'|'text'|'select', default, choices?, hint? }`. `hint` tampil sebagai tooltip. Key `jeda`, `backup`, `remark` dipakai panel.
-- Remark: `{ dataKey, key?, title?, width? }` atau cukup `'dataKey'`. `key` default `remark_<dataKey>`, `title` default `remark <dataKey>`. Butuh `idColumn`. Sebelum proses, panel memastikan semua `dataKey` remark yang terisi ada di template; kalau ada yang salah ketik, proses dihentikan sebelum ada yang dikirim. Isi kolom remark tetap tersimpan walau toggle dimatikan.
+- Remark: `{ dataKey, key?, title?, width? }` atau cukup `'dataKey'`. `key` default `remark_<dataKey>`, `title` default `remark <dataKey>`. Butuh `idColumn`. Sebelum proses, panel memastikan semua `dataKey` remark yang terisi ada di template; kalau ada yang salah ketik, proses dihentikan sebelum ada yang dikirim. Isi kolom remark tetap tersimpan walau toggle dimatikan. Untuk field roster (`dataKey#n`) yang barisnya baru diketahui saat proses, `process` mengembalikan `remarkKeys`, mis. `{ nama_usaha: 'nama_usaha#1001' }`, supaya catatan ditulis ke baris itu.
 - `idColumn` default ke kolom `uuid` pertama. Isi `null` kalau tidak perlu `FASIH.init()`/backup otomatis.
 - Opsional: `before(rows, ctx)` untuk menggantikan `FASIH.init` bawaan, dan `after(results, ctx)`.
-- `ctx` = `{ dryRun, options, FASIH, index, total, rowNumber, sleep }`. `options` sudah berisi `jeda`, `backup`, dan `remark`.
+- `ctx` = `{ dryRun, options, FASIH, index, total, rowNumber, sleep, remarks }`. `remarks` = remark terisi di baris itu `[{ dataKey, text }]` (kosong kalau toggle Remark mati). `options` sudah berisi `jeda`, `backup`, dan `remark`.
 - File dijalankan sebagai badan fungsi async. Artinya `await` boleh dipakai, `const`/`function` di dalamnya tidak bocor ke halaman, dan import ulang tidak akan bentrok.
 
 ## Catatan teknis

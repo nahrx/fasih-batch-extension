@@ -31,6 +31,14 @@
  *   diperbaiki (LEWATI "sudah sesuai" kalau total lama sudah benar).
  *   Angka tanpa pemisah ribuan (2961702, bukan 2.961.702).
  *   Satu baris = satu usaha; keluarga dengan 2 usaha -> 2 baris dengan assignment_id sama.
+ *
+ * Remark (toggle "Remark" di toolbar): kolom remark_nama_usaha, remark_biaya_produksi,
+ *   remark_biaya_pembelian, remark_operasional, remark_nilai_pendapatan, remark_gaji,
+ *   remark_non_operasional, remark_pendapatan_lain — ditambahkan panel setelah kolom I.
+ *   Sel terisi ditulis sebagai catatan di pertanyaan <field>#n baris usaha yang cocok
+ *   (mis. remark_operasional -> operasional#1001), satu submit per remark.
+ *   Nilai sudah sesuai tapi ada remark -> hanya remark yang ditulis.
+ *   Usaha tidak ditemukan (LEWATI) -> remark juga tidak ditulis.
  * ==========================================================================*/
 
 /* Komponen total per baris usaha (nama dasar, tanpa #n) — urutan = kolom C.. di sheet */
@@ -41,6 +49,9 @@ const KOLOM_NILAI = ['biaya_produksi', 'biaya_pembelian', 'operasional', 'nilai_
 
 /* Field nama yang dicocokkan dengan kolom nama_usaha */
 const FIELD_NAMA = ['nama_usaha', 'nama_usaha_edit', 'nama_komersial'];
+
+/* Field yang punya kolom remark (catatan per-pertanyaan di baris usaha #n) */
+const FIELD_REMARK = ['nama_usaha', ...KOLOM_NILAI];
 
 const norm = (s) => String(s ?? '').toUpperCase().replace(/\s+/g, ' ').trim();
 const rp = (v) => (v == null ? '-' : Number(v).toLocaleString('id-ID'));
@@ -71,7 +82,7 @@ function nilaiBaru(nilai, n, cari) {
   return V;
 }
 
-async function prosesSatu(row, { dryRun }) {
+async function prosesSatu(row, { dryRun, remarks = [] }) {
   const nilai = Object.fromEntries(KOLOM_NILAI.filter((k) => row[k] != null).map((k) => [k, row[k]]));
 
   const asg = await FASIH.getAssignment(row.assignment_id);
@@ -86,9 +97,15 @@ async function prosesSatu(row, { dryRun }) {
     return { skip: true, code: asg.code_identity, ket: `nama "${row.nama_usaha}" cocok dengan >1 baris usaha (#${cocok.join(', #')})` };
   const n = cocok[0];
 
+  /* remark ditulis panel ke field baris usaha ini: nama_usaha -> nama_usaha#1001 */
+  const remarkKeys = Object.fromEntries(FIELD_REMARK.map((k) => [k, `${k}#${n}`]));
+
   const V = nilaiBaru(nilai, n, cari);
-  if (Object.entries(V).every(([k, v]) => JSON.stringify(cari(k)) === JSON.stringify(v)))
-    return { skip: true, code: asg.code_identity, ket: `#${n} ${cari(`nama_usaha#${n}`)}: sudah sesuai` };
+  if (Object.entries(V).every(([k, v]) => JSON.stringify(cari(k)) === JSON.stringify(v))) {
+    const ket = `#${n} ${cari(`nama_usaha#${n}`)}: nilai sudah sesuai`;
+    /* ada remark -> tetap diteruskan supaya panel menulis remark-nya saja */
+    return remarks.length ? { code: asg.code_identity, ket, remarkKeys } : { skip: true, code: asg.code_identity, ket };
+  }
 
   const ubah = Object.keys(nilai).map((k) => `${k} ${rp(cari(`${k}#${n}`))} → ${rp(nilai[k])}`);
   const r = await FASIH.patch(row.assignment_id, (doc, { set }) => {
@@ -101,7 +118,7 @@ async function prosesSatu(row, { dryRun }) {
     `pengeluaran ${rp(cari(`total_pengeluaran#${n}`))} → ${rp(V[`total_pengeluaran#${n}`])}`,
     `pendapatan ${rp(cari(`total_pendapatan#${n}`))} → ${rp(V[`total_pendapatan#${n}`])}`,
     `${r.nChanges} perubahan`, versi(r, dryRun),
-  ].join(' · ') };
+  ].join(' · '), remarkKeys };
 }
 
 FASIH_BATCH.register({
@@ -120,13 +137,16 @@ FASIH_BATCH.register({
     { key: 'pendapatan_lain',  title: 'pendapatan_lain (opsional)', type: 'integer' },
   ],
   idColumn: 'assignment_id',
+  /* Catatan per-pertanyaan — muncul saat toggle Remark aktif; ditulis ke <dataKey>#n
+     baris usaha yang cocok (lewat remarkKeys dari process) */
+  remarks: FIELD_REMARK.map((k) => ({ dataKey: k, title: `remark ${k}` })),
   validateRow: (row) => {
     const e = {};
     for (const k of KOLOM_NILAI) if (row[k] != null && row[k] < 0) e[k] = 'tidak boleh negatif';
     return Object.keys(e).length ? e : null;
   },
 
-  async process(row, { dryRun }) {
-    return prosesSatu(row, { dryRun });
+  async process(row, { dryRun, remarks }) {
+    return prosesSatu(row, { dryRun, remarks });
   },
 });

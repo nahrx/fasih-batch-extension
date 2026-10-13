@@ -13,9 +13,10 @@
  * lalu baris foto_depan_p dihapus.
  *
  * Kolom sheet:
- *   A assignment_id | B no_banr | C no_bangunan_terbesar (opsional)
+ *   A assignment_id | B no_banr | C no_bangunan_terbesar (opsional) | D catatan (opsional)
  *   no_bangunan_terbesar kosong -> pakai opsi "No. bangunan terbesar default" di toolbar;
  *   keduanya kosong -> field tidak dikirim (hanya tampilan, turunan FormGear, beda per SLS).
+ *   catatan diisi -> field catatan (blok CATATAN) diganti dengan isi sel; kosong -> tidak diubah.
  * ==========================================================================*/
 
 /* Kode penggunaan bangunan yang dipilih di UI untuk kasus ini */
@@ -147,6 +148,7 @@ function turunanPrelist(predata, row, noBang) {
 const label0 = (v) => (Array.isArray(v) && v[0] && v[0].label != null ? v[0].label : JSON.stringify(v));
 const value0 = (v) => (Array.isArray(v) && v[0] ? String(v[0].value) : null);
 const angkaOpsi = (v) => (v == null || String(v).trim() === '' ? null : Number(String(v).trim()));
+const teksCatatan = (row) => String(row.catatan ?? '').trim();
 const versi = (r, dryRun) => (dryRun ? `v${r.version}` : `v${r.version} → v${r.versionAfter}`);
 
 async function prosesSatu(row, { dryRun, options }) {
@@ -161,6 +163,8 @@ async function prosesSatu(row, { dryRun, options }) {
   const predata = JSON.parse(asg.pre_defined_data).predata || [];
   const noBang = row.no_bangunan_terbesar ?? angkaOpsi(options.noBangDefault);
   const { V, n } = turunanPrelist(predata, row, noBang);
+  const catatan = teksCatatan(row);
+  if (catatan) V.catatan = catatan;
 
   let sebelum = null;
   const dipindah = [];
@@ -183,6 +187,7 @@ async function prosesSatu(row, { dryRun, options }) {
     `BANR ${V.no_banr}`,
     `${n} ART`,
     ...(noBang != null ? [`no_bangunan_terbesar ${noBang}`] : []),
+    ...(catatan ? ['catatan diubah'] : []),
     ...dipindah,
     `${r.nChanges} perubahan`, versi(r, dryRun),
   ].join(' · ') };
@@ -196,6 +201,7 @@ FASIH_BATCH.register({
     { key: 'assignment_id',        type: 'uuid', required: true, unique: true },
     { key: 'no_banr',              required: true, width: 160, trim: true },
     { key: 'no_bangunan_terbesar', title: 'no_bangunan_terbesar (opsional)', type: 'integer', width: 200 },
+    { key: 'catatan',              title: 'catatan (opsional)', type: 'text', width: 260 },
   ],
   idColumn: 'assignment_id',
   options: [

@@ -33,6 +33,7 @@
  * Kolom sheet:
  *   A assignment_id | B no_banr | C latitude (opsional) | D longitude (opsional)
  *   | E accuracy (opsional) | F no_bangunan_terbesar (opsional) | G kbli (opsional)
+ *   | H catatan (opsional)
  *   Koordinat desimal, koma atau titik (-0,49051 / -0.49051).
  *   latitude & longitude diisi berdua atau dikosongkan berdua; kosong -> geotag
  *   tidak dikirim (isi geotag yang sudah ada di record dibiarkan).
@@ -40,6 +41,7 @@
  *   no_bangunan_terbesar kosong -> opsi default di toolbar; keduanya kosong -> tidak dikirim.
  *   kbli: kode 5 digit (08999). 4 digit dianggap nol depannya hilang di Excel (1111 -> 01111).
  *   kbli kosong -> KBLI tidak diubah.
+ *   catatan diisi -> field catatan (blok CATATAN) diganti dengan isi sel; kosong -> tidak diubah.
  * ==========================================================================*/
 
 /* Kode penggunaan bangunan yang dipilih di UI untuk kasus ini */
@@ -75,6 +77,7 @@ const kosong = (v) => v == null || v === '' || (Array.isArray(v) && (!v.length |
 const perluDitemukan = (v) => kosong(v) || KODE_TIDAK_DITEMUKAN.includes(value0(v));
 const angkaOpsi = (v) => (v == null || String(v).trim() === '' ? null : Number(String(v).trim().replace(',', '.')));
 const versi = (r, dryRun) => (dryRun ? `v${r.version}` : `v${r.version} → v${r.versionAfter}`);
+const teksCatatan = (row) => String(row.catatan ?? '').trim();
 const kodeKbli = (s) => { const t = String(s ?? '').trim(); return /^\d{4}$/.test(t) ? `0${t}` : t; };
 
 /* Nomor baris usaha (#n) yang ada di record */
@@ -217,6 +220,10 @@ function buatMutator(row, barisUsaha, P, { akurasi, noBang, usahaDitemukan, kbli
       set('email_all', ditemukan.map((n) => get(`email#${n}`) || P[`email#${n}`]).filter(Boolean).join(' / '));
     }
 
+    /* ---- catatan (opsional) ---- */
+    const catatan = teksCatatan(row);
+    if (catatan) set('catatan', catatan);
+
     /* ---- pemberi jawaban & pencocokan ---- */
     set('ak_info', [{ label: 'Lainnya', value: '99' }, { label: 'Pemilik Usaha', value: '98' }]);
     awal('keluarga_match', FASIH.raw(null));
@@ -238,7 +245,7 @@ async function prosesSatu(row, { dryRun, options }) {
   const barisUsaha = barisUsahaDari(answers);
   const kode = kodeKbli(row.kbli);
   const usahaTertinggal = options.usahaDitemukan && barisUsaha.some((n) => perluDitemukan(cari(`keberadaan_usaha#${n}`)));
-  if (options.lewatiJikaSudah && value0(adaBang) === '1' && !usahaTertinggal && !kode)
+  if (options.lewatiJikaSudah && value0(adaBang) === '1' && !usahaTertinggal && !kode && !teksCatatan(row))
     return { skip: true, code: asg.code_identity, ket: `ada_bang_usaha sudah: ${sebelum}` +
              (options.usahaDitemukan && barisUsaha.length ? ' & semua usaha sudah berkode' : '') };
 
@@ -264,6 +271,7 @@ async function prosesSatu(row, { dryRun, options }) {
     ...(info.dibiarkan.length ? [`dibiarkan ${info.dibiarkan.join(' ')}`] : []),
     ...(kbli ? [`KBLI #${info.kbliKe[0]} ${info.kbliSebelum ?? '(kosong)'} → ${kbli.opsi[0].label}`,
                 ...(info.anomali8 ? ['⚠ anomali 8: 2 digit KBLI ≠ SBR'] : [])] : []),
+    ...(teksCatatan(row) ? ['catatan diubah'] : []),
     `${info.jumlahDitemukan}/${barisUsaha.length} usaha ditemukan`,
     `${r.nChanges} perubahan`, versi(r, dryRun),
   ].join(' · ') };
@@ -281,11 +289,12 @@ FASIH_BATCH.register({
     { key: 'accuracy',             title: 'accuracy (opsional)', type: 'number', width: 140 },
     { key: 'no_bangunan_terbesar', title: 'no_bangunan_terbesar (opsional)', type: 'integer', width: 200 },
     { key: 'kbli',                 title: 'kbli (opsional)', width: 120, trim: true, mono: true },
+    { key: 'catatan',              title: 'catatan (opsional)', type: 'text', width: 260 },
   ],
   idColumn: 'assignment_id',
   options: [
     { key: 'lewatiJikaSudah', label: 'Lewati yang sudah ditemukan', type: 'checkbox', default: true,
-      hint: 'Record yang ada_bang_usaha-nya sudah "1. Ditemukan" (tidak ada usaha yang masih tidak ditemukan, kolom kbli kosong) tidak diubah' },
+      hint: 'Record yang ada_bang_usaha-nya sudah "1. Ditemukan" (tidak ada usaha yang masih tidak ditemukan, kolom kbli & catatan kosong) tidak diubah' },
     { key: 'usahaDitemukan', label: 'Usaha → 1. Ditemukan', type: 'checkbox', default: true,
       hint: 'Baris usaha "0. Tidak Ditemukan"/kosong diubah ke "1. Ditemukan" + identitas dari prelist. Tutup/Non Respon/Ganda dibiarkan. Matikan = pola lama (keberadaan usaha tetap).' },
     { key: 'akurasiDefault', label: 'Akurasi geotag default (m)', type: 'number', default: 50,

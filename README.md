@@ -36,8 +36,8 @@ Catatan:
 
 ## Membuat batch-automation.js baru
 Di panel, klik **Download template**. File `batch-automation.js` akan diunduh dari `templates/batch-automation.template.js`.
-Template ini langsung bisa dipakai untuk **mengubah satu field per baris**, dengan kolom `assignment_id | data_key | nilai`. Isinya juga mencakup kontrak lengkap dan contoh pola lain: banyak field sekaligus, lewati berdasarkan kondisi, geotag, roster, dan hapus jawaban.
-Ubah bagian bertanda `TODO` (minimal `id` dan `name`), lalu **Import script**.
+Template ini kerangka kosong yang siap di-import: kolom `assignment_id`, serta `options`, `remarks`, dan `process` yang masih kosong.
+Isi bagian bertanda `TODO` (minimal `id`, `name`, dan field yang diubah di `process`), lalu **Import script**. Penjelasan lengkap setiap bagian ada di bawah.
 Template juga bisa dibuat dari salinan salah satu [contoh script](#contoh-script) atau `../batch-automation.js` (kasus OSS). Ganti `id`-nya supaya data sheet tidak tercampur dengan script asal. Bagian yang perlu diubah adalah `FASIH_BATCH.register({...})`:
 
 ```js

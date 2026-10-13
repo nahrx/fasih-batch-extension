@@ -10,11 +10,16 @@
  *     columns:  [{ key, title?, type?: 'text'|'uuid'|'number'|'integer', required?, unique?, width?, mono?, trim? }],
  *     idColumn: 'assignment_id',          // dipakai FASIH.init() & backup; default kolom uuid pertama
  *     options:  [{ key, label, type: 'checkbox'|'number'|'text'|'select', default, choices? }],
+ *     remarks:  [{ dataKey, key?, title?, width? }],   // opsional; kolom remark muncul saat toggle Remark aktif
  *     validateRow(row)  -> null | 'pesan' | { kolom: 'pesan' },
  *     before(rows, ctx), after(results, ctx),            // opsional
  *     async process(row, ctx) -> { skip?, status?, code?, ket? },
  *   })
  *   ctx = { dryRun, options, FASIH, index, total, rowNumber, sleep }
+ *
+ * Remark: kalau toggle Remark aktif, tiap sel remark yang terisi ditulis sebagai catatan
+ * per-pertanyaan lewat FASIH.setComment(id, dataKey, teks) setelah process() berhasil
+ * (bukan LEWATI/GAGAL). Teks yang sama persis di dataKey itu tidak ditulis dua kali.
  *
  * Kode script dijalankan dengan AsyncFunction (butuh 'unsafe-eval' di CSP halaman);
  * kalau CSP menolak, dijalankan lewat chrome.userScripts (bridge.js + background.js).
@@ -33,7 +38,8 @@
   const K = { code: 'fasih-batch:code', rows: (id) => `fasih-batch:rows:${id}`, settings: (id) => `fasih-batch:settings:${id}` };
 
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const BASE = { jeda: 5000, backup: true };
+  const BASE = { jeda: 5000, backup: false, remark: false };
+  const SETTINGS_V = 2;      // v2: default backup jadi tidak dicentang — pengaturan lama dibuang nilai backup-nya
   const RESULT_COLS = [
     { key: '_status', title: 'status', width: 90 },
     { key: '_code', title: 'code_identity', width: 210, mono: true },
@@ -142,6 +148,7 @@
     <span class="sep"></span>
     <label>Jeda <input type="number" data-set="jeda" min="0" step="500"> ms</label>
     <label class="backup-opt"><input type="checkbox" data-set="backup"> Backup sebelum LIVE</label>
+    <label class="remark-opt"><input type="checkbox" data-set="remark"> Remark</label>
     <span class="opts"></span>
     <span class="spacer"></span>
     <button class="b" data-act="resetStatus" title="Kosongkan kolom status, code_identity, keterangan">Hapus status</button>
@@ -191,10 +198,21 @@
       : def.idColumn || (columns.find((c) => c.type === 'uuid') || {}).key || null;
     if (idColumn && !keys.has(idColumn)) throw new Error(`idColumn "${idColumn}" tidak ada di columns`);
     const options = (def.options || []).map((o) => {
-      if (!o || !o.key || o.key in BASE) throw new Error(`opsi tidak valid: ${JSON.stringify(o)} (key wajib, bukan "jeda"/"backup")`);
+      if (!o || !o.key || o.key in BASE || o.key === '_v') throw new Error(`opsi tidak valid: ${JSON.stringify(o)} (key wajib, bukan "jeda"/"backup"/"remark")`);
       return { type: 'checkbox', ...o, label: o.label || o.key };
     });
-    return { ...def, name: def.name || def.id, description: def.description || '', columns, idColumn, options };
+    const remarks = (def.remarks || []).map((rm) => {
+      const x = typeof rm === 'string' ? { dataKey: rm } : { ...rm };
+      if (!x || !x.dataKey) throw new Error(`remark tidak valid: ${JSON.stringify(rm)} (dataKey wajib)`);
+      x.key = x.key || `remark_${x.dataKey}`;
+      if (String(x.key).startsWith('_')) throw new Error(`remark ${x.dataKey}: key tidak boleh diawali "_"`);
+      if (keys.has(x.key)) throw new Error(`kolom ganda: ${x.key} (remark bentrok dengan kolom lain)`);
+      keys.add(x.key);
+      return { key: x.key, dataKey: String(x.dataKey), title: x.title || `remark ${x.dataKey}`, type: 'text', required: false,
+               unique: false, editable: true, width: x.width || 260, mono: false, trim: true };
+    });
+    if (remarks.length && !idColumn) throw new Error('remarks butuh idColumn (assignment id) untuk FASIH.setComment');
+    return { ...def, name: def.name || def.id, description: def.description || '', columns, idColumn, options, remarks };
   }
 
   function register(def) {
@@ -203,7 +221,9 @@
     if (sheet) { saveNow(); sheet.destroy(); sheet = null; }
     mod = m; regCount++;
     const defaults = Object.fromEntries(m.options.map((o) => [o.key, o.default ?? (o.type === 'checkbox' ? false : '')]));
-    S = { ...BASE, ...defaults, ...LS.get(K.settings(m.id), {}) };
+    const saved = LS.get(K.settings(m.id), {});
+    if (saved._v !== SETTINGS_V) delete saved.backup;      // pengaturan versi lama selalu menyimpan backup: true (default lama)
+    S = { ...BASE, ...defaults, ...saved, _v: SETTINGS_V };
     buildUI();
     console.log(`[FASIH_BATCH] terdaftar: ${m.name} — kolom ${m.columns.map((c) => c.key).join(', ')}`);
     return m;
@@ -219,6 +239,9 @@
   }
 
   /* ---------------- tampilan sesuai script ---------------- */
+  const remarkOn = () => !!(mod && mod.remarks.length && S.remark);
+  const inputCols = () => (remarkOn() ? [...mod.columns, ...mod.remarks] : mod.columns);
+
   function buildUI() {
     if (sheet) { saveNow(); sheet.destroy(); sheet = null; }
     const has = !!mod;
@@ -236,6 +259,11 @@
     if (!has) { $('.summary').textContent = ''; return; }
 
     $('.backup-opt').hidden = !mod.idColumn;
+    const ro = $('.remark-opt');
+    ro.hidden = !mod.remarks.length;
+    ro.title = mod.remarks.length
+      ? `Tampilkan kolom remark; sel yang terisi ditulis sebagai catatan (FASIH.setComment) ke: ${mod.remarks.map((x) => x.dataKey).join(', ')}`
+      : '';
     $('.opts').innerHTML = mod.options.map((o) => {
       const tip = o.hint ? ` title="${esc(o.hint)}"` : '';
       if (o.type === 'checkbox') return `<label${tip}><input type="checkbox" data-set="${esc(o.key)}"> ${esc(o.label)}</label>`;
@@ -249,12 +277,14 @@
       const v = S[inp.dataset.set];
       if (inp.type === 'checkbox') inp.checked = !!v; else inp.value = v ?? '';
     });
-    $('.hint').innerHTML = `Klik sel <b>A1</b> lalu <kbd>Ctrl</kbd>+<kbd>V</kbd> dari Excel — ${mod.columns.length} kolom: ` +
-      mod.columns.map((c) => `<b>${esc(c.title)}</b>${c.required ? '' : ' <i>(opsional)</i>'}`).join(', ') +
-      `. Baris judul otomatis dilewati. Sel merah = tidak valid (arahkan kursor untuk alasannya). <kbd>Ctrl</kbd>+<kbd>C</kbd> menyalin hasil kembali ke Excel.`;
+    const input = inputCols();
+    $('.hint').innerHTML = `Klik sel <b>A1</b> lalu <kbd>Ctrl</kbd>+<kbd>V</kbd> dari Excel — ${input.length} kolom: ` +
+      input.map((c) => `<b>${esc(c.title)}</b>${c.required ? '' : ' <i>(opsional)</i>'}`).join(', ') +
+      `. Baris judul otomatis dilewati. Sel merah = tidak valid (arahkan kursor untuk alasannya). <kbd>Ctrl</kbd>+<kbd>C</kbd> menyalin hasil kembali ke Excel.` +
+      (remarkOn() ? ` Remark yang terisi ditulis sebagai catatan per-pertanyaan setelah baris berhasil diproses.` : '');
 
     sheet = new FasihSheet($('.grid'), {
-      columns: [...mod.columns, ...RESULT_COLS],
+      columns: [...input, ...RESULT_COLS],
       cellClass: (row, key, r) => {
         if (key === '_status') return STATUS_CLASS[row._status] || '';
         if (key === '_ket' && row._status === 'GAGAL') return 'err-text';
@@ -276,7 +306,7 @@
   function saveNow() {
     clearTimeout(saveTimer);
     if (!mod || !sheet) return;
-    const keys = [...mod.columns, ...RESULT_COLS].map((c) => c.key);
+    const keys = [...mod.columns, ...mod.remarks, ...RESULT_COLS].map((c) => c.key);   // remark tetap disimpan walau toggle mati
     LS.set(K.rows(mod.id), sheet.filled().map(({ row }) => Object.fromEntries(keys.map((k) => [k, row[k] ?? '']))));
     LS.set(K.settings(mod.id), S);
   }
@@ -349,6 +379,27 @@
   const stamp = () => new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
   const errText = (e) => String((e && e.message) || e);
 
+  /* remark terisi di satu baris sheet: [{ dataKey, text }] */
+  const remarksOf = (row) => mod.remarks
+    .map((rm) => ({ dataKey: rm.dataKey, text: String(row[rm.key] ?? '').trim() }))
+    .filter((x) => x.text);
+
+  /* Tulis remark lewat FASIH.setComment (satu submit per remark). Teks yang sudah ada
+     persis di dataKey yang sama dilewati supaya LIVE ulang tidak menggandakan catatan. */
+  async function applyRemarks(id, list, dry) {
+    const out = [];
+    for (const { dataKey, text } of list) {
+      const asg = await F().getAssignment(id);
+      let notes = [];
+      try { notes = JSON.parse(asg.comment || '{}').notes || []; } catch {}
+      const ada = notes.some((n) => n && n.dataKey === dataKey && (n.comments || []).some((c) => c && c.comment === text));
+      if (ada) { out.push(`${dataKey} (sudah ada)`); continue; }
+      const r = await F().setComment(id, dataKey, text, { dryRun: dry });
+      out.push(dry ? dataKey : `${dataKey} v${r.version} → v${r.versionAfter}`);
+    }
+    return out;
+  }
+
   async function run(dry) {
     if (running || !mod) return;
     if (sheet.edit) sheet.commitEdit();
@@ -361,9 +412,13 @@
     }
     const targets = dry ? v.items : v.items.filter((x) => sheet.rows[x.r]._status !== 'OK');
     if (!targets.length) return msg('Semua baris sudah OK.');
+    const withRemark = remarkOn();
+    for (const x of targets) x.remarks = withRemark ? remarksOf(sheet.rows[x.r]) : [];
     if (!dry) {
       const belumDry = targets.filter((x) => sheet.rows[x.r]._status !== 'DRY RUN').length;
+      const nRemark = targets.reduce((n, x) => n + x.remarks.length, 0);
       if (!confirm(`[${mod.name}]\nKirim perubahan LIVE untuk ${targets.length} baris?` +
+        (nRemark ? `\nRemark: ${nRemark} sel terisi — ditulis lewat FASIH.setComment untuk baris yang berhasil.` : '') +
         (belumDry ? `\n\n⚠️ ${belumDry} baris belum lolos dry run.` : '') +
         `\n\nServer tidak memvalidasi isi dokumen — pastikan hasil dry run sudah diperiksa.`)) return;
     }
@@ -378,19 +433,34 @@
       msg('Menyiapkan…');
       if (m.before) await m.before(rows, ctx);
       else if (m.idColumn) await F().init({ assignmentId: rows[0][m.idColumn] });
+      if (withRemark && F()._internal.SCHEMA) {        // dataKey remark salah ketik -> hentikan sebelum ada yang dikirim
+        const dipakai = new Set(targets.flatMap((x) => x.remarks.map((y) => y.dataKey)));
+        const salah = [...dipakai].filter((k) => !F().schema(k));
+        if (salah.length) throw new Error(`dataKey remark tidak ada di template: ${salah.join(', ')} — periksa "remarks" di script`);
+      }
       if (!dry && S.backup && m.idColumn) {
         msg(`Membuat backup ${rows.length} record…`);
         await F().backup(rows.map((x) => x[m.idColumn]), `fasih-backup-${m.id}-${stamp()}.json`);
       }
       for (let i = 0; i < targets.length && !abort; i++) {
-        const { r, item } = targets[i];
+        const { r, item, remarks } = targets[i];
         setStatus(r, 'PROSES…');
         msg(`${dry ? 'Dry run' : 'LIVE'} ${i + 1}/${targets.length}${m.idColumn ? ` — ${item[m.idColumn]}` : ''}`);
         try {
           const res = (await m.process(item, { ...ctx, index: i, rowNumber: r + 1 })) || {};
-          const status = res.status || (res.skip ? 'LEWATI' : dry ? 'DRY RUN' : 'OK');
-          setStatus(r, status, res.code, res.ket);
-          results.push({ row: r + 1, item, status, result: res });
+          let status = res.status || (res.skip ? 'LEWATI' : dry ? 'DRY RUN' : 'OK'), ket = res.ket;
+          if (remarks.length && !res.skip && status !== 'GAGAL') {
+            try {
+              const done = await applyRemarks(item[m.idColumn], remarks, dry);
+              ket = [ket, `remark: ${done.join(', ')}`].filter(Boolean).join(' · ');
+            } catch (e) {
+              status = 'GAGAL';
+              ket = [ket, `${dry ? '' : 'data sudah diproses, '}remark GAGAL: ${errText(e)}`].filter(Boolean).join(' · ');
+              console.warn(`[FASIH_BATCH] ${i + 1}/${targets.length} remark GAGAL`, item, e);
+            }
+          }
+          setStatus(r, status, res.code, ket);
+          results.push({ row: r + 1, item, remarks, status, result: res });
           console.log(`[FASIH_BATCH] ${i + 1}/${targets.length} ${status}`, item, res);
         } catch (e) {
           setStatus(r, 'GAGAL', undefined, errText(e));
@@ -513,7 +583,11 @@
     if (!inp) return;
     const k = inp.dataset.set;
     S[k] = inp.type === 'checkbox' ? inp.checked : inp.type === 'number' ? Math.max(0, Number(inp.value) || 0) : inp.value;
-    save();
+    if (k === 'remark') {                                   // kolom remark muncul/hilang -> bangun ulang sheet
+      if (sheet && sheet.edit) sheet.commitEdit();
+      buildUI();
+      msg(S.remark ? `Remark aktif — kolom ${mod.remarks.map((x) => x.title).join(', ')} ditambahkan.` : 'Remark nonaktif — isi kolom remark tetap tersimpan.');
+    } else save();
   });
   ['keydown', 'keyup', 'keypress'].forEach((ev) => root.addEventListener(ev, (e) => {      // jangan bocor ke shortcut halaman
     if (e.target.matches && e.target.matches('[data-set]')) e.stopPropagation();
@@ -525,7 +599,7 @@
   });
   window.addEventListener('beforeunload', (e) => { if (running) { e.preventDefault(); e.returnValue = ''; } });
 
-  window.FASIH_BATCH = Object.freeze({ register, get current() { return mod; }, version: '1.0.0' });
+  window.FASIH_BATCH = Object.freeze({ register, get current() { return mod; }, version: '1.1.0' });
 
   /* ---------------- muat ulang script terakhir ---------------- */
   buildUI();

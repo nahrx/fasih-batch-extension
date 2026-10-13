@@ -28,6 +28,12 @@
  *                 Default: kolom uuid pertama. null = tanpa init/backup otomatis.
  *   options     : pengaturan tambahan di toolbar (nilai masuk ke ctx.options)
  *                 { key, label, type: 'checkbox'|'number'|'text'|'select', default, choices?, hint? }
+ *   remarks     : kolom remark (opsional) — muncul setelah kolom di atas saat toggle "Remark"
+ *                 di toolbar aktif (default nonaktif).
+ *                 { dataKey, key?, title?, width? }  atau cukup 'dataKey'; key default "remark_<dataKey>"
+ *                 Sel yang terisi ditulis sebagai catatan per-pertanyaan dengan
+ *                 FASIH.setComment(id, dataKey, teks) setelah process() berhasil (bukan LEWATI/GAGAL).
+ *                 Teks yang sama persis di dataKey itu tidak ditulis dua kali. Butuh idColumn.
  *   validateRow : (row) => null | 'pesan' | { kolom: 'pesan' }     — sel merah, proses ditahan
  *   before      : async (rows, ctx)    — menggantikan FASIH.init() bawaan       (opsional)
  *   after       : async (results, ctx) — setelah semua baris                     (opsional)
@@ -38,7 +44,7 @@
  *
  *   row : { [key kolom]: nilai }  — type number/integer sudah Number (kosong = null)
  *   ctx : { dryRun, options, FASIH, index, total, rowNumber, sleep }
- *         options berisi jeda, backup, + options di atas
+ *         options berisi jeda, backup, remark, + options di atas
  *
  * FASIH (general_console.js) yang sering dipakai:
  *   FASIH.getAssignment(id)                         -> record mentah (data = JSON string)
@@ -48,6 +54,7 @@
  *   FASIH.raw(nilai)                 -> pasang apa adanya, tanpa terjemahan opsi
  *   FASIH.geotag(lat, lon, akurasi)  -> nilai field geotag
  *   FASIH.schema('kode_bang')        -> tipe + daftar opsi valid
+ *   FASIH.setComment(id, dataKey, teks, { dryRun })  -> catatan per-pertanyaan (dipakai kolom remark)
  *
  * File ini dijalankan sebagai badan fungsi async: boleh pakai await di tingkat atas,
  * const/function di sini tidak bocor ke halaman, dan aman di-import ulang.
@@ -84,6 +91,12 @@ FASIH_BATCH.register({
       hint: 'Tolak (GAGAL) kalau data_key belum ada di record — mencegah salah ketik dataKey' },
     { key: 'nilaiJson', label: 'Nilai berupa JSON mentah', type: 'checkbox', default: false,
       hint: 'Nilai di-JSON.parse lalu dipasang apa adanya lewat FASIH.raw (tanpa terjemahan opsi)' },
+  ],
+
+  /* TODO: kolom remark (opsional). Muncul saat toggle "Remark" di toolbar dicentang. */
+  remarks: [
+    // { dataKey: 'kode_bang', title: 'remark kode bangunan' },
+    // 'catatan',                                   // singkatan -> kolom remark_catatan
   ],
 
   /* Validasi tambahan per baris (opsional). Kembalikan null kalau valid. */

@@ -14,7 +14,8 @@ Ini panel sheet ala Google Sheets untuk update massal assignment FASIH. Extensio
    Sel merah artinya tidak valid. Arahkan kursor ke sel itu untuk melihat alasannya.
 3. Klik **Dry run**, lalu periksa kolom status, code_identity, dan keterangan.
 4. Uji 1 baris LIVE dulu dan buka hasilnya di UI. Setelah itu klik **Jalankan LIVE**.
-   Baris yang sudah **OK** tidak dikirim ulang. *Backup sebelum LIVE* mengunduh `fasih-backup-<id>-*.json`, yang bisa dipulihkan dengan `FASIH.restore`.
+   Baris yang sudah **OK** tidak dikirim ulang. *Backup sebelum LIVE* (default tidak dicentang) mengunduh `fasih-backup-<id>-*.json`, yang bisa dipulihkan dengan `FASIH.restore`.
+5. Opsional: centang **Remark** (default nonaktif, hanya muncul kalau script punya `remarks`). Kolom remark ditambahkan setelah kolom script. Sel remark yang terisi ditulis sebagai catatan per-pertanyaan dengan `FASIH.setComment` setelah baris berhasil diproses (bukan LEWATI/GAGAL). Satu remark = satu submit, jadi versi record naik per remark. Teks yang sama persis di pertanyaan yang sama tidak ditulis dua kali. Saat dry run, remark hanya dicek, tidak dikirim.
 
 Data sheet dan pengaturan disimpan per `id` script di localStorage FASIH. Kalau berganti script lalu kembali ke script sebelumnya, datanya masih ada.
 
@@ -50,6 +51,10 @@ FASIH_BATCH.register({
   ],
   idColumn: 'assignment_id',              // untuk FASIH.init() & backup
   options: [{ key: 'lewati', label: 'Lewati yang sudah', type: 'checkbox', default: true }],
+  remarks: [                              // opsional; tampil saat toggle Remark dicentang
+    { dataKey: 'kbli', title: 'remark KBLI' },
+    'no_banr',                            // singkatan -> kolom remark_no_banr
+  ],
   validateRow: (row) => null,             // atau 'pesan' / { kolom: 'pesan' }
   async process(row, { dryRun, options, FASIH }) {
     const r = await FASIH.update(row.assignment_id, { /* ... */ }, { dryRun, log: false });
@@ -60,10 +65,11 @@ FASIH_BATCH.register({
 
 - Kolom: `{ key, title?, type?, required?, unique?, width?, mono?, trim? }`. `key` tidak boleh diawali `_` (dipakai panel untuk status/keterangan). `title` mengganti judul kolom, `width` lebar dalam px, `mono` font monospace, `trim` buang spasi di awal/akhir (default aktif kecuali `text`).
 - `type`: `text` (default), `uuid`, `number`, `integer`. Nilai `number`/`integer` sampai ke `process` sudah dalam bentuk Number (sel kosong = `null`).
-- Opsi toolbar: `{ key, label, type: 'checkbox'|'number'|'text'|'select', default, choices?, hint? }`. `hint` tampil sebagai tooltip.
+- Opsi toolbar: `{ key, label, type: 'checkbox'|'number'|'text'|'select', default, choices?, hint? }`. `hint` tampil sebagai tooltip. Key `jeda`, `backup`, `remark` dipakai panel.
+- Remark: `{ dataKey, key?, title?, width? }` atau cukup `'dataKey'`. `key` default `remark_<dataKey>`, `title` default `remark <dataKey>`. Butuh `idColumn`. Sebelum proses, panel memastikan semua `dataKey` remark yang terisi ada di template; kalau ada yang salah ketik, proses dihentikan sebelum ada yang dikirim. Isi kolom remark tetap tersimpan walau toggle dimatikan.
 - `idColumn` default ke kolom `uuid` pertama. Isi `null` kalau tidak perlu `FASIH.init()`/backup otomatis.
 - Opsional: `before(rows, ctx)` untuk menggantikan `FASIH.init` bawaan, dan `after(results, ctx)`.
-- `ctx` = `{ dryRun, options, FASIH, index, total, rowNumber, sleep }`. `options` sudah berisi `jeda` dan `backup`.
+- `ctx` = `{ dryRun, options, FASIH, index, total, rowNumber, sleep }`. `options` sudah berisi `jeda`, `backup`, dan `remark`.
 - File dijalankan sebagai badan fungsi async. Artinya `await` boleh dipakai, `const`/`function` di dalamnya tidak bocor ke halaman, dan import ulang tidak akan bentrok.
 
 ## Catatan teknis

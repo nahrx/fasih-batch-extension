@@ -7,17 +7,36 @@ Ini panel sheet ala Google Sheets untuk update massal assignment FASIH. Extensio
 2. Klik **Load unpacked**, lalu pilih folder ini. Kalau versi sebelumnya sudah terpasang, klik ⟳ Reload.
 3. Reload tab `https://fasih-sm.bps.go.id` yang sudah login. Tombol hijau **⊞ FASIH Batch** akan muncul di kanan bawah. Panel juga bisa dibuka lewat ikon extension.
 
+## Menu
+Header panel berisi judul **FASIH Batch** dan dua menu di sampingnya:
+- **Automation**: update massal lewat script `batch-automation.js` (bagian [Pakai](#pakai)).
+- **Restore**: kembalikan assignment ke isi file backup `.json` (bagian [Restore](#restore)).
+
+Menu terakhir yang dibuka diingat. Selama proses berjalan, menu tidak bisa dipindah.
+
 ## Pakai
+Bagian ini untuk menu **Automation**.
 1. Klik **Import script**, lalu pilih `batch-automation.js`. Judul, kolom sheet, dan opsi di toolbar langsung mengikuti isi script.
    Script terakhir disimpan dan dimuat ulang otomatis setiap kali halaman dibuka. Kalau file-nya diubah, import ulang.
 2. Klik sel **A1**, lalu tekan Ctrl+V dari Excel. Baris judul otomatis dilewati.
    Sel merah artinya tidak valid. Arahkan kursor ke sel itu untuk melihat alasannya.
 3. Klik **Dry run**, lalu periksa kolom status, code_identity, dan keterangan.
 4. Uji 1 baris LIVE dulu dan buka hasilnya di UI. Setelah itu klik **Jalankan LIVE**.
-   Baris yang sudah **OK** tidak dikirim ulang. *Backup sebelum LIVE* (default tidak dicentang) mengunduh `fasih-backup-<id>-*.json`, yang bisa dipulihkan dengan `FASIH.restore`.
+   Baris yang sudah **OK** tidak dikirim ulang. *Backup sebelum LIVE* (default tidak dicentang) mengunduh `fasih-backup-<id>-*.json`, yang bisa dipulihkan lewat menu **Restore** (atau `FASIH.restore`).
 5. Opsional: centang **Remark** (default nonaktif, hanya muncul kalau script punya `remarks`). Kolom remark ditambahkan setelah kolom script. Sel remark yang terisi ditulis sebagai catatan per-pertanyaan dengan `FASIH.setComment` setelah baris berhasil diproses (bukan LEWATI/GAGAL). Satu remark = satu submit, jadi versi record naik per remark. Teks yang sama persis di pertanyaan yang sama tidak ditulis dua kali. Saat dry run, remark hanya dicek, tidak dikirim.
 
 Data sheet dan pengaturan disimpan per `id` script di localStorage FASIH. Kalau berganti script lalu kembali ke script sebelumnya, datanya masih ada.
+
+## Restore
+Menu **Restore** mengembalikan assignment ke isi file backup (`fasih-backup-*.json` dari *Backup sebelum LIVE* atau `FASIH.backup`). Yang dikembalikan adalah seluruh jawaban, catatan (comment), dan kolom `data1`–`data10`. Perubahan apa pun setelah backup dibuat akan tertimpa.
+1. Klik **Pilih file backup**. Semua assignment di file tampil di sheet bersama code_identity, versi, dan jumlah jawaban saat backup dibuat.
+2. Kalau hanya sebagian yang perlu direstore, hapus `assignment_id` yang tidak perlu (pilih sel, lalu Delete). Cara lain: Ctrl+A, Delete, lalu tempel daftar `assignment_id` dari Excel. Id yang tidak ada di file ditandai merah.
+3. Klik **Dry run**. Kolom keterangan menunjukkan apa yang akan dikembalikan, misalnya `2 jawaban berubah, 1 jawaban dihapus, kolom data3, catatan`. Record yang sudah sama dengan backup berstatus **LEWATI** dan tidak dikirim, jadi versinya tidak naik.
+4. Klik **Restore LIVE**. *Backup kondisi sekarang sebelum LIVE* (default dicentang) lebih dulu mengunduh `fasih-backup-sebelum-restore-*.json`, supaya restore bisa dibatalkan dengan me-restore file itu.
+
+Catatan:
+- Record dengan survey period yang berbeda dari backup ditolak (**GAGAL**).
+- File backup tidak disimpan di browser karena ukurannya bisa beberapa MB. Kalau halaman di-reload, pilih file lagi. Pengaturan jeda dan backup tetap tersimpan.
 
 ## Contoh script
 Folder `example - imported script/` berisi script yang sudah dipakai di lapangan. Langsung **Import script**, atau salin sebagai titik awal kasus baru. Penjelasan lengkap (pola diff record, field yang diubah/tidak dikirim) ada di komentar bagian atas tiap file.
@@ -82,7 +101,7 @@ FASIH_BATCH.register({
 | `manifest.json` | MV3; content script MAIN world + bridge |
 | `lib/general_console.js` | FASIH (getAssignment, patch, update, backup, restore, ...) |
 | `sheet.js` | komponen grid (`FasihSheet`) |
-| `panel.js` | panel generik, `window.FASIH_BATCH.register`, import, validasi, proses berurutan |
+| `panel.js` | panel generik (menu Automation & Restore), `window.FASIH_BATCH.register`, import, validasi, proses berurutan, restore dari file backup |
 | `bridge.js` / `background.js` | toggle lewat ikon, URL template, cadangan `chrome.userScripts` |
 | `templates/batch-automation.template.js` | template yang diunduh lewat tombol **Download template** |
 | `example - imported script/` | contoh script siap import (lihat [Contoh script](#contoh-script)) |

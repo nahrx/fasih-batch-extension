@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "FASIH Batch",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Panel sheet untuk update massal assignment FASIH. Kolom dan proses diambil dari file batch-automation.js yang di-import.",
   "permissions": [
     "userScripts"

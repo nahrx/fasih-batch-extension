@@ -26,7 +26,9 @@
  * Kolom sheet:
  *   A assignment_id | B nama_usaha | C biaya_produksi | D biaya_pembelian | E operasional
  *   | F nilai_pendapatan | G gaji | H non_operasional | I pendapatan_lain
- *   Sel angka KOSONG = nilai lama dipertahankan. Total dihitung ulang otomatis.
+ *   Semua kolom angka (C..I) opsional. Sel KOSONG = nilai lama dipertahankan.
+ *   Total dihitung ulang otomatis — kalau semua kolom angka kosong, hanya total yang
+ *   diperbaiki (LEWATI "sudah sesuai" kalau total lama sudah benar).
  *   Angka tanpa pemisah ribuan (2961702, bukan 2.961.702).
  *   Satu baris = satu usaha; keluarga dengan 2 usaha -> 2 baris dengan assignment_id sama.
  * ==========================================================================*/
@@ -109,10 +111,10 @@ FASIH_BATCH.register({
   columns: [
     { key: 'assignment_id',    type: 'uuid', required: true },
     { key: 'nama_usaha',       required: true, width: 220 },
-    { key: 'biaya_produksi',   type: 'integer' },
-    { key: 'biaya_pembelian',  type: 'integer' },
-    { key: 'operasional',      type: 'integer' },
-    { key: 'nilai_pendapatan', type: 'integer' },
+    { key: 'biaya_produksi',   title: 'biaya_produksi (opsional)', type: 'integer' },
+    { key: 'biaya_pembelian',  title: 'biaya_pembelian (opsional)', type: 'integer' },
+    { key: 'operasional',      title: 'operasional (opsional)', type: 'integer' },
+    { key: 'nilai_pendapatan', title: 'nilai_pendapatan (opsional)', type: 'integer' },
     { key: 'gaji',             title: 'gaji (opsional)', type: 'integer' },
     { key: 'non_operasional',  title: 'non_operasional (opsional)', type: 'integer' },
     { key: 'pendapatan_lain',  title: 'pendapatan_lain (opsional)', type: 'integer' },
@@ -121,8 +123,7 @@ FASIH_BATCH.register({
   validateRow: (row) => {
     const e = {};
     for (const k of KOLOM_NILAI) if (row[k] != null && row[k] < 0) e[k] = 'tidak boleh negatif';
-    if (Object.keys(e).length) return e;
-    return KOLOM_NILAI.every((k) => row[k] == null) ? 'semua kolom nilai kosong — tidak ada yang diubah' : null;
+    return Object.keys(e).length ? e : null;
   },
 
   async process(row, { dryRun }) {

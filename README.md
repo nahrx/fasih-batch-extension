@@ -1,6 +1,6 @@
 # FASIH Batch (Chrome extension)
 
-Ini panel sheet ala Google Sheets untuk update massal assignment FASIH. Extension ini sendiri tidak berisi logika update apa pun. Kolom sheet dan proses per baris diambil dari file **`batch-automation.js`** yang di-import lewat panel. Contohnya ada di `../batch-automation.js` (kasus usaha OSS: Tidak Ditemukan → Ditemukan).
+Ini panel sheet ala Google Sheets untuk update massal assignment FASIH. Extension ini sendiri tidak berisi logika update apa pun. Kolom sheet dan proses per baris diambil dari file **`batch-automation.js`** yang di-import lewat panel. Contoh siap pakai ada di folder [`example - imported script/`](#contoh-script) dan di `../batch-automation.js` (kasus usaha OSS: Tidak Ditemukan → Ditemukan).
 
 ## Pasang
 1. Buka `chrome://extensions` (atau `edge://extensions`), lalu nyalakan **Developer mode**.
@@ -18,11 +18,26 @@ Ini panel sheet ala Google Sheets untuk update massal assignment FASIH. Extensio
 
 Data sheet dan pengaturan disimpan per `id` script di localStorage FASIH. Kalau berganti script lalu kembali ke script sebelumnya, datanya masih ada.
 
+## Contoh script
+Folder `example - imported script/` berisi script yang sudah dipakai di lapangan. Langsung **Import script**, atau salin sebagai titik awal kasus baru. Penjelasan lengkap (pola diff record, field yang diubah/tidak dikirim) ada di komentar bagian atas tiap file.
+
+| file | panel (`id`) | kasus | kolom sheet | opsi toolbar |
+|---|---|---|---|---|
+| `batch-automation - input BANR prelist keluarga dengan keberadaan anggota keluarga ditemukan.js` | Update Keluarga BANR (`keluarga-non-respon-ke-ditemukan-banr`) | Keluarga "tidak dapat ditemui" (kode 5) → 1. Ditemukan + BANR + roster anggota keluarga dari prelist. Foto `foto_depan_p` dipindah ke `foto_depan`. | `assignment_id`, `no_banr`, `no_bangunan_terbesar` (opsional) | Lewati yang sudah ditemukan, No. bangunan terbesar default |
+| `batch-automation - input BANR prelist usaha BKU dengan keberadaan usaha ditemukan dan input kbli.js` | Update Usaha BANR (`usaha-tidak-ditemukan-ke-ditemukan-banr`) | Bangunan & usaha 0. Tidak Ditemukan → 1. Ditemukan + BANR (+ geotag), identitas usaha dari prelist, KBLI dari master KBLI (API lookup FASIH). | `assignment_id`, `no_banr`, `latitude`, `longitude`, `accuracy`, `no_bangunan_terbesar`, `kbli` (semua kecuali dua pertama opsional) | Lewati yang sudah ditemukan, Usaha → 1. Ditemukan, Akurasi geotag default, No. bangunan terbesar default, URL lookup KBLI |
+| `batch-automation - update keberadaan anggota keluarga ditemukan.js` | Update Keberadaan AK (`keberadaan-ak-kosong-isi-kode-1`) | Keberadaan AK yang masih kosong → 1. Tinggal di rumah ini; `kode_bang` → 3; roster dari prelist bila kosong. AK yang sudah terisi dibiarkan. | `assignment_id` | Hitung ulang ringkasan |
+| `batch-automation - update keuangan usaha prelist keluarga.js` | Koreksi Keuangan Usaha (`keuangan-usaha-keluarga`) | Koreksi biaya & pendapatan usaha di record keluarga. Usaha dicari berdasarkan nama; total pengeluaran & pendapatan dihitung ulang. | `assignment_id`, `nama_usaha`, `biaya_produksi`, `biaya_pembelian`, `operasional`, `nilai_pendapatan`, `gaji`, `non_operasional`, `pendapatan_lain` | – |
+
+Catatan:
+- Sel angka kosong di script keuangan usaha artinya nilai lama dipertahankan. Tulis angka tanpa pemisah ribuan (`2961702`, bukan `2.961.702`).
+- Script keberadaan AK menandai keterangan dengan **⚠ CEK UI** kalau ada AK berkode selain 1/5. Ringkasan record itu tidak dihitung ulang, jadi buka record tersebut di UI.
+- Record yang sudah sesuai atau tidak cocok dengan kasusnya tidak dikirim (versi record tidak naik) dan berstatus LEWATI. Alasannya tertulis di kolom keterangan.
+
 ## Membuat batch-automation.js baru
 Di panel, klik **Download template**. File `batch-automation.js` akan diunduh dari `templates/batch-automation.template.js`.
 Template ini langsung bisa dipakai untuk **mengubah satu field per baris**, dengan kolom `assignment_id | data_key | nilai`. Isinya juga mencakup kontrak lengkap dan contoh pola lain: banyak field sekaligus, lewati berdasarkan kondisi, geotag, roster, dan hapus jawaban.
 Ubah bagian bertanda `TODO` (minimal `id` dan `name`), lalu **Import script**.
-Template juga bisa dibuat dari salinan `../batch-automation.js` (kasus OSS). Bagian yang perlu diubah adalah `FASIH_BATCH.register({...})`:
+Template juga bisa dibuat dari salinan salah satu [contoh script](#contoh-script) atau `../batch-automation.js` (kasus OSS). Ganti `id`-nya supaya data sheet tidak tercampur dengan script asal. Bagian yang perlu diubah adalah `FASIH_BATCH.register({...})`:
 
 ```js
 FASIH_BATCH.register({
@@ -43,7 +58,10 @@ FASIH_BATCH.register({
 });
 ```
 
-- `type`: `text` (default), `uuid`, `number`, `integer`. Nilai `number`/`integer` sampai ke `process` sudah dalam bentuk Number.
+- Kolom: `{ key, title?, type?, required?, unique?, width?, mono?, trim? }`. `key` tidak boleh diawali `_` (dipakai panel untuk status/keterangan). `title` mengganti judul kolom, `width` lebar dalam px, `mono` font monospace, `trim` buang spasi di awal/akhir (default aktif kecuali `text`).
+- `type`: `text` (default), `uuid`, `number`, `integer`. Nilai `number`/`integer` sampai ke `process` sudah dalam bentuk Number (sel kosong = `null`).
+- Opsi toolbar: `{ key, label, type: 'checkbox'|'number'|'text'|'select', default, choices?, hint? }`. `hint` tampil sebagai tooltip.
+- `idColumn` default ke kolom `uuid` pertama. Isi `null` kalau tidak perlu `FASIH.init()`/backup otomatis.
 - Opsional: `before(rows, ctx)` untuk menggantikan `FASIH.init` bawaan, dan `after(results, ctx)`.
 - `ctx` = `{ dryRun, options, FASIH, index, total, rowNumber, sleep }`. `options` sudah berisi `jeda` dan `backup`.
 - File dijalankan sebagai badan fungsi async. Artinya `await` boleh dipakai, `const`/`function` di dalamnya tidak bocor ke halaman, dan import ulang tidak akan bentrok.
@@ -61,3 +79,4 @@ FASIH_BATCH.register({
 | `panel.js` | panel generik, `window.FASIH_BATCH.register`, import, validasi, proses berurutan |
 | `bridge.js` / `background.js` | toggle lewat ikon, URL template, cadangan `chrome.userScripts` |
 | `templates/batch-automation.template.js` | template yang diunduh lewat tombol **Download template** |
+| `example - imported script/` | contoh script siap import (lihat [Contoh script](#contoh-script)) |

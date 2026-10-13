@@ -27,8 +27,9 @@
  *   A assignment_id | B nama_usaha | C biaya_produksi | D biaya_pembelian | E operasional
  *   | F nilai_pendapatan | G gaji | H non_operasional | I pendapatan_lain
  *   Semua kolom angka (C..I) opsional. Sel KOSONG = nilai lama dipertahankan.
- *   Total dihitung ulang otomatis — kalau semua kolom angka kosong, hanya total yang
- *   diperbaiki (LEWATI "sudah sesuai" kalau total lama sudah benar).
+ *   Total dihitung ulang otomatis, tapi HANYA kalau ada kolom angka yang nilainya berbeda
+ *   dari record. Kolom angka kosong semua / sama semua -> data tidak disentuh:
+ *   ada remark -> hanya remark yang ditulis; tanpa remark -> LEWATI.
  *   Angka tanpa pemisah ribuan (2961702, bukan 2.961.702).
  *   Satu baris = satu usaha; keluarga dengan 2 usaha -> 2 baris dengan assignment_id sama.
  *
@@ -37,7 +38,7 @@
  *   remark_non_operasional, remark_pendapatan_lain — ditambahkan panel setelah kolom I.
  *   Sel terisi ditulis sebagai catatan di pertanyaan <field>#n baris usaha yang cocok
  *   (mis. remark_operasional -> operasional#1001), satu submit per remark.
- *   Nilai sudah sesuai tapi ada remark -> hanya remark yang ditulis.
+ *   Tidak ada data yang diubah tapi ada remark -> hanya remark yang ditulis.
  *   Usaha tidak ditemukan (LEWATI) -> remark juga tidak ditulis.
  * ==========================================================================*/
 
@@ -100,14 +101,18 @@ async function prosesSatu(row, { dryRun, remarks = [] }) {
   /* remark ditulis panel ke field baris usaha ini: nama_usaha -> nama_usaha#1001 */
   const remarkKeys = Object.fromEntries(FIELD_REMARK.map((k) => [k, `${k}#${n}`]));
 
-  const V = nilaiBaru(nilai, n, cari);
-  if (Object.entries(V).every(([k, v]) => JSON.stringify(cari(k)) === JSON.stringify(v))) {
-    const ket = `#${n} ${cari(`nama_usaha#${n}`)}: nilai sudah sesuai`;
-    /* ada remark -> tetap diteruskan supaya panel menulis remark-nya saja */
+  /* Data hanya dikirim kalau ada kolom nilai terisi yang BERBEDA dari record.
+     Kolom nilai kosong semua / sama semua -> data tidak disentuh (total tidak dihitung ulang);
+     ada remark -> tetap diteruskan supaya panel menulis remark-nya saja. */
+  const berubah = Object.keys(nilai).filter((k) => Number(cari(`${k}#${n}`)) !== nilai[k] || cari(`${k}#${n}`) == null);
+  if (!berubah.length) {
+    const ket = `#${n} ${cari(`nama_usaha#${n}`)}: ` +
+      (Object.keys(nilai).length ? 'nilai sudah sesuai' : 'kolom nilai kosong') + (remarks.length ? ' — data tidak diubah, hanya remark' : '');
     return remarks.length ? { code: asg.code_identity, ket, remarkKeys } : { skip: true, code: asg.code_identity, ket };
   }
 
-  const ubah = Object.keys(nilai).map((k) => `${k} ${rp(cari(`${k}#${n}`))} → ${rp(nilai[k])}`);
+  const V = nilaiBaru(nilai, n, cari);
+  const ubah = berubah.map((k) => `${k} ${rp(cari(`${k}#${n}`))} → ${rp(nilai[k])}`);
   const r = await FASIH.patch(row.assignment_id, (doc, { set }) => {
     for (const [k, v] of Object.entries(V)) set(k, v);
   }, { dryRun, log: false });

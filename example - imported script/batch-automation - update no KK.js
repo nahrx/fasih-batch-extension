@@ -16,9 +16,11 @@
  *   createdAt/updatedAt per jawaban. isForceSubmit tidak berubah.
  *
  * Kolom sheet:
- *   A assignment_id | B no_kk (benar, 16 digit) | C no_kk_lama (opsional)
+ *   A assignment_id | B no_kk (benar, 16 digit, opsional) | C no_kk_lama (opsional)
  *   no_kk_lama terisi -> record hanya diubah kalau no_kk di record SAMA dengan no_kk_lama
  *   (pengaman salah tempel baris). Kosong -> tidak dicek.
+ *   Data hanya dikirim kalau no_kk terisi dan BERBEDA dari record. no_kk kosong / sudah
+ *   sama -> data tidak disentuh: ada remark -> hanya remark yang ditulis; tanpa remark -> LEWATI.
  *   Format sel no_kk di Excel sebagai Text, supaya tidak jadi 6,47205E+15.
  * ==========================================================================*/
 
@@ -29,7 +31,7 @@ const POLA_KK = /^\d{16}$/;
 const teks = (v) => (v == null ? '' : String(v).trim());
 const versi = (r, dryRun) => (dryRun ? `v${r.version}` : `v${r.version} → v${r.versionAfter}`);
 
-async function prosesSatu(row, { dryRun }) {
+async function prosesSatu(row, { dryRun, remarks = [] }) {
   const kkBaru = teks(row.no_kk);
   const kkLama = teks(row.no_kk_lama);
 
@@ -42,14 +44,21 @@ async function prosesSatu(row, { dryRun }) {
   if (!ada('no_kk')) throw new Error('tidak ada no_kk — bukan record keluarga?');
   const sebelum = cari('no_kk');
 
-  if (kkLama && sebelum !== kkLama)
-    return { skip: true, code: asg.code_identity, ket: `no_kk di record ${sebelum || '(kosong)'} ≠ no_kk_lama ${kkLama}` };
-
   /* dtsen_no_kk hanya diisi kalau barisnya memang ada (Blok III sudah terbentuk) */
   const field = FIELD_KK.filter((k) => k === 'no_kk' || ada(k));
-  const berubah = field.filter((k) => cari(k) !== kkBaru);
-  if (!berubah.length)
-    return { skip: true, code: asg.code_identity, ket: `no_kk sudah ${kkBaru}` };
+  const berubah = kkBaru ? field.filter((k) => cari(k) !== kkBaru) : [];
+
+  /* Tidak ada data yang diubah: ada remark -> diteruskan supaya panel menulis remark-nya saja */
+  if (!berubah.length) {
+    const ket = (kkBaru ? `no_kk sudah ${kkBaru}` : `kolom no_kk kosong (record: ${sebelum || '(kosong)'})`) +
+                (remarks.length ? ' — data tidak diubah, hanya remark' : '');
+    if (remarks.length && kkLama && sebelum !== kkLama && sebelum !== kkBaru)
+      return { skip: true, code: asg.code_identity, ket: `no_kk di record ${sebelum || '(kosong)'} ≠ no_kk_lama ${kkLama}` };
+    return remarks.length ? { code: asg.code_identity, ket } : { skip: true, code: asg.code_identity, ket };
+  }
+
+  if (kkLama && sebelum !== kkLama)
+    return { skip: true, code: asg.code_identity, ket: `no_kk di record ${sebelum || '(kosong)'} ≠ no_kk_lama ${kkLama}` };
 
   const ubah = berubah.map((k) => `${k} ${cari(k) || '(kosong)'} → ${kkBaru}`);
   const r = await FASIH.patch(row.assignment_id, (doc, { set }) => {
@@ -65,7 +74,7 @@ FASIH_BATCH.register({
   description: 'Ganti no_kk & dtsen_no_kk dengan nomor KK yang benar',
   columns: [
     { key: 'assignment_id', type: 'uuid', required: true, unique: true },
-    { key: 'no_kk',         title: 'no_kk (benar)', required: true, width: 180, mono: true },
+    { key: 'no_kk',         title: 'no_kk (benar, opsional)', width: 180, mono: true },
     { key: 'no_kk_lama',    title: 'no_kk_lama (opsional)', width: 180, mono: true },
   ],
   idColumn: 'assignment_id',
@@ -75,13 +84,13 @@ FASIH_BATCH.register({
   ],
   validateRow: (row) => {
     const e = {};
-    if (!POLA_KK.test(teks(row.no_kk))) e.no_kk = 'harus 16 digit angka (format sel Excel sebagai Text)';
+    if (teks(row.no_kk) && !POLA_KK.test(teks(row.no_kk))) e.no_kk = 'harus 16 digit angka (format sel Excel sebagai Text)';
     if (teks(row.no_kk_lama) && !POLA_KK.test(teks(row.no_kk_lama))) e.no_kk_lama = 'harus 16 digit angka';
-    if (!e.no_kk && teks(row.no_kk) === teks(row.no_kk_lama)) e.no_kk = 'sama dengan no_kk_lama';
+    if (!e.no_kk && teks(row.no_kk) && teks(row.no_kk) === teks(row.no_kk_lama)) e.no_kk = 'sama dengan no_kk_lama';
     return Object.keys(e).length ? e : null;
   },
 
-  async process(row, { dryRun }) {
-    return prosesSatu(row, { dryRun });
+  async process(row, { dryRun, remarks }) {
+    return prosesSatu(row, { dryRun, remarks });
   },
 });

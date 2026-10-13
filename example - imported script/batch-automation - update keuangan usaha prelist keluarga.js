@@ -1,0 +1,131 @@
+/* ============================================================================
+ * batch-automation - keuangan usaha.js — di-import lewat tombol "Import script" di extension FASIH Batch
+ * ----------------------------------------------------------------------------
+ * KASUS: koreksi nilai keuangan usaha (pengeluaran & pendapatan) di record keluarga
+ *   Pola dari diff record 9f5f702e (YUHANAH, usaha "YUHANA BUTIK", v13 -> v14):
+ *     keluarga ntb salah.json -> keluarga ntb benar.json
+ *   sama dengan "update keuangan usaha - batch.js".
+ *
+ * Usaha dicari BERDASARKAN NAMANYA, bukan nomor baris: kolom nama_usaha dicocokkan
+ * dengan nama_usaha#n / nama_usaha_edit#n / nama_komersial#n (tanpa beda huruf
+ * besar-kecil & spasi). Tidak ada usaha yang namanya cocok -> baris LEWATI.
+ *
+ * Yang berubah di contoh (baris usaha #1001):
+ *   biaya_produksi#n       24.000.000 -> 2.961.702
+ *   biaya_pembelian#n      36.000.000 -> 25.000.000
+ *   operasional#n           4.200.000 -> 36.000.000
+ *   nilai_pendapatan#n     48.000.000 -> 50.500.000
+ *   total_pengeluaran#n    69.200.000 -> 68.961.702   = gaji + biaya_produksi + biaya_pembelian
+ *                                                       + operasional + non_operasional
+ *   total_pendapatan#n    108.000.000 -> 110.500.000  = nilai_pendapatan + pendapatan_lain
+ * Tidak dikirim (dibangun ulang FormGear saat record dibuka):
+ *   pilih_umkm_options#n, var_hiden_pml#n, tanggal_anomali, tanggal_mulai_anomali,
+ *   anomali_*_resolved_at, cek_anomali_button, no_bangunan_terbesar,
+ *   templateVersion/validationVersion, createdAt/updatedAt per jawaban.
+ *
+ * Kolom sheet:
+ *   A assignment_id | B nama_usaha | C biaya_produksi | D biaya_pembelian | E operasional
+ *   | F nilai_pendapatan | G gaji | H non_operasional | I pendapatan_lain
+ *   Sel angka KOSONG = nilai lama dipertahankan. Total dihitung ulang otomatis.
+ *   Angka tanpa pemisah ribuan (2961702, bukan 2.961.702).
+ *   Satu baris = satu usaha; keluarga dengan 2 usaha -> 2 baris dengan assignment_id sama.
+ * ==========================================================================*/
+
+/* Komponen total per baris usaha (nama dasar, tanpa #n) — urutan = kolom C.. di sheet */
+const KOMPONEN_PENGELUARAN = ['gaji', 'biaya_produksi', 'biaya_pembelian', 'operasional', 'non_operasional'];
+const KOMPONEN_PENDAPATAN  = ['nilai_pendapatan', 'pendapatan_lain'];
+const KOLOM_NILAI = ['biaya_produksi', 'biaya_pembelian', 'operasional', 'nilai_pendapatan',
+                     'gaji', 'non_operasional', 'pendapatan_lain'];
+
+/* Field nama yang dicocokkan dengan kolom nama_usaha */
+const FIELD_NAMA = ['nama_usaha', 'nama_usaha_edit', 'nama_komersial'];
+
+const norm = (s) => String(s ?? '').toUpperCase().replace(/\s+/g, ' ').trim();
+const rp = (v) => (v == null ? '-' : Number(v).toLocaleString('id-ID'));
+const versi = (r, dryRun) => (dryRun ? `v${r.version}` : `v${r.version} → v${r.versionAfter}`);
+
+/* Baris usaha (n) yang namanya cocok */
+function cariBarisUsaha(answers, namaUsaha) {
+  const target = norm(namaUsaha);
+  const baris = new Set();
+  for (const a of answers) {
+    const m = a.dataKey.match(/^([a-z_]+)#(\d+)$/);
+    if (m && FIELD_NAMA.includes(m[1]) && norm(a.answer) === target) baris.add(m[2]);
+  }
+  return [...baris];
+}
+
+const daftarNamaUsaha = (answers) => answers
+  .filter((a) => /^nama_usaha#\d+$/.test(a.dataKey))
+  .map((a) => `#${a.dataKey.split('#')[1]} ${a.answer}`).join(' | ') || '(tidak ada usaha)';
+
+/* Nilai yang dikirim — meniru isi dokumen setelah blok keuangan diedit di UI */
+function nilaiBaru(nilai, n, cari) {
+  const ambil = (k) => (k in nilai ? nilai[k] : Number(cari(`${k}#${n}`)) || 0);
+  const V = {};
+  for (const [k, v] of Object.entries(nilai)) V[`${k}#${n}`] = v;
+  V[`total_pengeluaran#${n}`] = KOMPONEN_PENGELUARAN.reduce((s, k) => s + ambil(k), 0);
+  V[`total_pendapatan#${n}`]  = KOMPONEN_PENDAPATAN.reduce((s, k) => s + ambil(k), 0);
+  return V;
+}
+
+async function prosesSatu(row, { dryRun }) {
+  const nilai = Object.fromEntries(KOLOM_NILAI.filter((k) => row[k] != null).map((k) => [k, row[k]]));
+
+  const asg = await FASIH.getAssignment(row.assignment_id);
+  if (!asg || !asg.data) throw new Error('assignment tidak ditemukan / belum ada isian');
+  const answers = JSON.parse(asg.data).answers;
+  const cari = (k) => (answers.find((a) => a.dataKey === k) || {}).answer;
+
+  const cocok = cariBarisUsaha(answers, row.nama_usaha);
+  if (!cocok.length)
+    return { skip: true, code: asg.code_identity, ket: `usaha "${row.nama_usaha}" tidak ditemukan — ada: ${daftarNamaUsaha(answers)}` };
+  if (cocok.length > 1)
+    return { skip: true, code: asg.code_identity, ket: `nama "${row.nama_usaha}" cocok dengan >1 baris usaha (#${cocok.join(', #')})` };
+  const n = cocok[0];
+
+  const V = nilaiBaru(nilai, n, cari);
+  if (Object.entries(V).every(([k, v]) => JSON.stringify(cari(k)) === JSON.stringify(v)))
+    return { skip: true, code: asg.code_identity, ket: `#${n} ${cari(`nama_usaha#${n}`)}: sudah sesuai` };
+
+  const ubah = Object.keys(nilai).map((k) => `${k} ${rp(cari(`${k}#${n}`))} → ${rp(nilai[k])}`);
+  const r = await FASIH.patch(row.assignment_id, (doc, { set }) => {
+    for (const [k, v] of Object.entries(V)) set(k, v);
+  }, { dryRun, log: false });
+
+  return { code: r.code, ket: [
+    `#${n} ${cari(`nama_usaha#${n}`)}`,
+    ...ubah,
+    `pengeluaran ${rp(cari(`total_pengeluaran#${n}`))} → ${rp(V[`total_pengeluaran#${n}`])}`,
+    `pendapatan ${rp(cari(`total_pendapatan#${n}`))} → ${rp(V[`total_pendapatan#${n}`])}`,
+    `${r.nChanges} perubahan`, versi(r, dryRun),
+  ].join(' · ') };
+}
+
+FASIH_BATCH.register({
+  id: 'keuangan-usaha-keluarga',
+  name: 'Koreksi Keuangan Usaha',
+  description: 'Cari usaha berdasarkan nama → ubah biaya/pendapatan, hitung ulang total pengeluaran & pendapatan',
+  columns: [
+    { key: 'assignment_id',    type: 'uuid', required: true },
+    { key: 'nama_usaha',       required: true, width: 220 },
+    { key: 'biaya_produksi',   type: 'integer' },
+    { key: 'biaya_pembelian',  type: 'integer' },
+    { key: 'operasional',      type: 'integer' },
+    { key: 'nilai_pendapatan', type: 'integer' },
+    { key: 'gaji',             title: 'gaji (opsional)', type: 'integer' },
+    { key: 'non_operasional',  title: 'non_operasional (opsional)', type: 'integer' },
+    { key: 'pendapatan_lain',  title: 'pendapatan_lain (opsional)', type: 'integer' },
+  ],
+  idColumn: 'assignment_id',
+  validateRow: (row) => {
+    const e = {};
+    for (const k of KOLOM_NILAI) if (row[k] != null && row[k] < 0) e[k] = 'tidak boleh negatif';
+    if (Object.keys(e).length) return e;
+    return KOLOM_NILAI.every((k) => row[k] == null) ? 'semua kolom nilai kosong — tidak ada yang diubah' : null;
+  },
+
+  async process(row, { dryRun }) {
+    return prosesSatu(row, { dryRun });
+  },
+});

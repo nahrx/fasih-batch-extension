@@ -25,7 +25,8 @@
  *   daftar_anomali["8"] = usaha yang 2 digit KBLI-nya beda dengan KBLI SBR (kbli_prelist).
  *   Master diambil dari API lookup FASIH (tabel m_kbli2025_se_v3A) sekali per sesi, lalu dicari lokal.
  *   Respons lookup (contoh kbli.json): { data: [{ Kategori, Kode, Judul, Deskripsi, BukancakupanSE, kat_kbli }] }.
- *   Kode tidak ada di master atau BukancakupanSE = 1 -> GAGAL, record tidak dikirim.
+ *   Kode tidak ada di master -> GAGAL, record tidak dikirim.
+ *   Kode dengan BukancakupanSE = 1 tetap diisi; keterangan ditandai "⚠ KBLI bukan cakupan SE".
  *
  * Tidak dikirim (dibangun ulang FormGear): pilih_umkm_options#n, var_hiden_pml#n,
  *   var_narasi#n, is_from_cawi, templateVersion/validationVersion.
@@ -143,14 +144,14 @@ async function opsiKbli(kode, url) {
   const peta = await muatMasterKbli(url);
   const o = peta.get(kode);
   if (!o) throw new Error(`KBLI ${kode} tidak ada di master (${peta.size} kode dimuat)`);
-  if (String(kunci(o, 'BukancakupanSE') ?? '0') === '1') throw new Error(`KBLI ${kode} bukan cakupan SE (${kunci(o, 'kat_kbli')})`);
+  const bukanCakupan = String(kunci(o, 'BukancakupanSE') ?? '0') === '1';            // tetap dipakai, hanya ditandai
   const judul = kunci(o, 'judul', 'judul_kbli', 'nama', 'uraian_kbli');
   let kat = kunci(o, 'kategori', 'kat');
   let label = kunci(o, 'kat_kbli', 'label');                        // template: desc = kat_kbli -> "[B][08999]Judul"
   if (label == null) label = `[${kat ?? ''}][${kode}]${judul ?? ''}`;
   kat = (String(label).match(/^\[([A-Z])\]/) || [])[1] ?? kat ?? '';
   const description = kunci(o, 'description', 'deskripsi', 'desc', 'uraian', 'keterangan') ?? '';
-  return { opsi: [{ description: String(description), label: String(label), value: kode }], kategori: String(kat) };
+  return { opsi: [{ description: String(description), label: String(label), value: kode }], kategori: String(kat), bukanCakupan };
 }
 
 /* ---------------------------------------------------------------------------
@@ -270,6 +271,7 @@ async function prosesSatu(row, { dryRun, options }) {
       : info.diubah.length ? `usaha → 1. Ditemukan: #${info.diubah.join(', #')}` : 'keberadaan usaha tidak diubah',
     ...(info.dibiarkan.length ? [`dibiarkan ${info.dibiarkan.join(' ')}`] : []),
     ...(kbli ? [`KBLI #${info.kbliKe[0]} ${info.kbliSebelum ?? '(kosong)'} → ${kbli.opsi[0].label}`,
+                ...(kbli.bukanCakupan ? ['⚠ KBLI bukan cakupan SE'] : []),
                 ...(info.anomali8 ? ['⚠ anomali 8: 2 digit KBLI ≠ SBR'] : [])] : []),
     ...(teksCatatan(row) ? ['catatan diubah'] : []),
     `${info.jumlahDitemukan}/${barisUsaha.length} usaha ditemukan`,

@@ -1,5 +1,5 @@
 /* ============================================================================
- * FASIH Batch — panel generik di halaman fasih-sm.bps.go.id (MAIN world).
+ * Fasih Batch Extension — panel generik di halaman fasih-sm.bps.go.id (MAIN world).
  * ----------------------------------------------------------------------------
  * Panel tidak tahu apa pun tentang jenis update. Logika & kolom sheet datang dari
  * file batch-automation.js yang di-import lewat tombol "Import script". File itu
@@ -27,8 +27,11 @@
  * Kode script dijalankan dengan AsyncFunction (butuh 'unsafe-eval' di CSP halaman);
  * kalau CSP menolak, dijalankan lewat chrome.userScripts (bridge.js + background.js).
  *
- * Menu di header: "Automation" (sheet + script di atas) dan "Restore" (kembalikan
- * assignment ke isi file backup .json dari FASIH.backup / "Backup sebelum LIVE").
+ * Menu di header: "Automation" (sheet + script di atas), "Restore" (kembalikan
+ * assignment ke isi file backup .json dari FASIH.backup / "Backup sebelum LIVE"), dan
+ * "Custom automation" (FASIH Sheet: import kuesioner HTML, isi assignment_id -> data dimuat
+ * dari get-by-assignment-id; halaman custom/sheet.html dijalankan di iframe srcdoc supaya
+ * berjalan di origin FASIH dan memakai login yang sama).
  * ==========================================================================*/
 
 (() => {
@@ -89,6 +92,8 @@
   nav.menu button:disabled { opacity: .45; cursor: default; }
   .hdr-auto { display: contents; }
   .view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .custom-box { flex: 1; min-height: 0; display: flex; }
+  .custom-frame { flex: 1; width: 100%; height: 100%; border: 0; background: #fff; }
   header .script { color: #3c4043; background: #f1f3f4; border-radius: 12px; padding: 3px 10px; white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
   .spacer { flex: 1; }
   .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 14px; background: #f8f9fa; border-bottom: 1px solid #dadce0; }
@@ -146,13 +151,14 @@
   .sheet td input { width: 100%; height: 100%; border: 0; outline: 0; padding: 0; font: inherit; background: #fff; color: inherit; }
   .sheet .kb { position: fixed; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; resize: none; }
 </style>
-<button class="fab" title="FASIH Batch">⊞ FASIH Batch</button>
+<button class="fab" title="Fasih Batch Extension">⊞ Fasih Batch Extension</button>
 <div class="panel" hidden>
   <header>
-    <span class="logo">⊞</span><span class="title">FASIH Batch</span>
+    <span class="logo">⊞</span><span class="title">Fasih Batch Extension</span>
     <nav class="menu">
       <button data-view="auto" title="Update massal lewat script batch-automation.js">Automation</button>
       <button data-view="restore" title="Kembalikan assignment ke isi file backup .json">Restore</button>
+      <button data-view="custom" title="FASIH Sheet: import kuesioner HTML, isi assignment_id untuk memuat data dari FASIH">Custom automation</button>
     </nav>
     <span class="sub"></span>
     <span class="spacer"></span>
@@ -218,13 +224,16 @@
       </div>
     </div>
   </div>
+  <div class="view v-custom" hidden>
+    <div class="custom-box"><div class="empty"><div class="big">⊞</div><b>Memuat FASIH Sheet…</b></div></div>
+  </div>
   <footer><span class="summary"></span><div class="progress"><div></div></div><span class="msg"></span></footer>
 </div>`;
 
   const $ = (s) => root.querySelector(s);
   const A = (s) => root.querySelector(`.v-auto ${s}`), R = (s) => root.querySelector(`.v-restore ${s}`);
   const panel = $('.panel'), fab = $('.fab'), fileInput = $('.f-script'), empty = A('.empty');
-  let view = 'auto';                                    // menu aktif: 'auto' | 'restore'
+  let view = 'auto';                                    // menu aktif: 'auto' | 'restore' | 'custom'
 
   /* ---------------- status bar ---------------- */
   function msg(text, kind = '') { const m = $('.msg'); m.textContent = text; m.className = 'msg ' + kind; m.title = text; }
@@ -354,7 +363,7 @@
     if (!panel.hidden && view === 'auto') sheet.focus();
   }
 
-  /* judul tetap "FASIH Batch"; di sampingnya nama script / file backup sesuai menu aktif */
+  /* judul tetap "Fasih Batch Extension"; di sampingnya nama script / file backup sesuai menu aktif */
   function headerSub() {
     const sub = $('.sub');
     if (view === 'auto') sub.innerHTML = mod ? `<b>${esc(mod.name)}</b>${mod.description ? ` — ${esc(mod.description)}` : ''}` : '';
@@ -745,13 +754,44 @@
     if (running) return;
     if (sheet && sheet.edit) sheet.commitEdit();
     if (rsheet && rsheet.edit) rsheet.commitEdit();
-    view = v === 'restore' ? 'restore' : 'auto';
+    view = v === 'restore' || v === 'custom' ? v : 'auto';
     LS.set(K.view, view);
     root.querySelectorAll('[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
     $('.v-auto').hidden = view !== 'auto'; $('.v-restore').hidden = view !== 'restore'; $('.hdr-auto').hidden = view !== 'auto';
+    $('.v-custom').hidden = view !== 'custom';
     $('.summary').textContent = ''; progress(0, 0); msg('');
-    if (view === 'restore') rbuild();
+    if (view === 'custom') { headerSubCustom(); if (!panel.hidden) loadCustom(); }
+    else if (view === 'restore') rbuild();
     else { headerSub(); if (sheet) { sheet.render(); summary(); if (!panel.hidden) sheet.focus(); } }
+  }
+
+  /* ---------------- menu Custom automation: FASIH Sheet (custom/sheet.html) ----------------
+     Halaman pemuat dari extension dimasukkan sebagai srcdoc iframe: dokumen srcdoc mewarisi origin
+     halaman FASIH, sehingga fetch ke /app/api/... memakai cookie login tanpa CORS, dan data sheet
+     tersimpan di localStorage/IndexedDB origin FASIH. Dimuat saat menu ini pertama kali dibuka. */
+  let customHtml = null, customFrame = null;
+  function headerSubCustom() {
+    $('.sub').innerHTML = '<b>FASIH Sheet</b> — import kuesioner HTML, lalu isi kolom assignment_id';
+  }
+  async function loadCustom(force = false) {
+    if (customFrame && !force) return;
+    try {
+      if (!customHtml) {
+        const { url } = await askBridge('custom-sheet-url', {}, 3000);
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`custom/sheet.html ${r.status}`);
+        customHtml = await r.text();
+      }
+      if (!customFrame) {
+        customFrame = document.createElement('iframe');
+        customFrame.className = 'custom-frame';
+        customFrame.title = 'Custom automation (FASIH Sheet)';
+        $('.custom-box').replaceChildren(customFrame);
+      }
+      customFrame.srcdoc = `${customHtml}\n<!-- ${Date.now()} -->`;   // nilai baru -> iframe dimuat ulang
+    } catch (e) {
+      msg(`Gagal memuat Custom automation: ${errText(e)}`, 'err');
+    }
   }
 
   /* ---------------- import script ---------------- */
@@ -829,7 +869,8 @@
   const toggle = (show = panel.hidden) => {
     panel.hidden = !show; fab.hidden = show;
     if (!show) return;
-    if (view === 'restore') { if (rsheet && rfile) { rsheet.render(); rsummary(); rsheet.focus(); } }
+    if (view === 'custom') { loadCustom(); customFrame?.focus(); }
+    else if (view === 'restore') { if (rsheet && rfile) { rsheet.render(); rsummary(); rsheet.focus(); } }
     else if (sheet) { sheet.render(); summary(); sheet.focus(); }
   };
   fab.addEventListener('click', () => toggle(true));
@@ -885,6 +926,8 @@
     if (e.target.matches && e.target.matches('[data-set],[data-rset]')) e.stopPropagation();
   }));
   window.addEventListener('message', (e) => {
+    // tombol "Ganti kuesioner" di FASIH Sheet -> muat ulang halaman pemuat di iframe
+    if (customFrame && e.source === customFrame.contentWindow && e.data && e.data.__fasihBatch === 'custom-reload') return loadCustom(true);
     if (e.source !== window || !e.data) return;
     if (e.data.__fasihBatch === 'toggle') toggle();                 // klik ikon extension
     if (e.data.__fasihBatch === 'load-error') lastLoadError = e.data.error;

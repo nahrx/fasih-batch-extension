@@ -6,6 +6,7 @@
  *   - 'exec'         : jalankan kode batch-automation.js lewat chrome.userScripts
  *                      (cadangan bila CSP halaman menolak eval)
  *   - 'template-url' : URL template batch-automation.js di dalam extension
+ *   - 'custom-sheet-url' : URL halaman FASIH Sheet (menu Custom automation)
  *   - klik ikon extension -> { __fasihBatch: 'toggle' }
  * ==========================================================================*/
 
@@ -16,6 +17,8 @@ window.addEventListener('message', (e) => {
 
   if (type === 'template-url') {
     reply(true, { url: chrome.runtime.getURL('templates/batch-automation.template.js') });
+  } else if (type === 'custom-sheet-url') {
+    reply(true, { url: chrome.runtime.getURL('custom/sheet.html') });
   } else if (type === 'exec') {
     try {
       chrome.runtime.sendMessage({ type: 'exec-user-code', code: e.data.code }, (res) => {

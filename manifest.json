@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "FASIH Batch",
-  "version": "2.3.0",
+  "name": "Fasih Batch Extension",
+  "version": "3.0",
   "description": "Panel sheet untuk update massal assignment FASIH. Kolom dan proses diambil dari file batch-automation.js yang di-import.",
   "permissions": [
     "userScripts"
@@ -10,7 +10,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Buka/tutup panel FASIH Batch"
+    "default_title": "Buka/tutup panel Fasih Batch Extension"
   },
   "content_scripts": [
     {
@@ -19,6 +19,7 @@
       ],
       "js": [
         "lib/general_console.js",
+        "lib/custom_console.js",
         "sheet.js",
         "panel.js"
       ],
@@ -38,7 +39,8 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "templates/batch-automation.template.js"
+        "templates/batch-automation.template.js",
+        "custom/sheet.html"
       ],
       "matches": [
         "https://fasih-sm.bps.go.id/*"

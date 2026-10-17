@@ -10,8 +10,8 @@ Ini panel sheet ala Google Sheets untuk update massal assignment FASIH. Extensio
 ## Menu
 Header panel berisi judul **Fasih Batch Extension** dan tiga menu di sampingnya:
 - **Automation**: update massal lewat script `batch-automation.js` (bagian [Pakai](#pakai)).
-- **Restore**: kembalikan assignment ke isi file backup `.json` (bagian [Restore](#restore)).
 - **Custom automation**: FASIH Sheet, sheet berbasis kuesioner HTML (bagian [Custom automation](#custom-automation)).
+- **Restore**: kembalikan assignment ke isi file backup `.json` (bagian [Restore](#restore)).
 
 Menu terakhir yang dibuka diingat. Selama proses berjalan, menu tidak bisa dipindah.
 

@@ -157,8 +157,8 @@
     <span class="logo">⊞</span><span class="title">Fasih Batch Extension</span>
     <nav class="menu">
       <button data-view="auto" title="Update massal lewat script batch-automation.js">Automation</button>
-      <button data-view="restore" title="Kembalikan assignment ke isi file backup .json">Restore</button>
       <button data-view="custom" title="FASIH Sheet: import kuesioner HTML, isi assignment_id untuk memuat data dari FASIH">Custom automation</button>
+      <button data-view="restore" title="Kembalikan assignment ke isi file backup .json">Restore</button>
     </nav>
     <span class="sub"></span>
     <span class="spacer"></span>

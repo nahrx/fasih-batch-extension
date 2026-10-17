@@ -1,6 +1,6 @@
 # Fasih Batch Extension (Chrome extension)
 
-Ini panel sheet ala Google Sheets untuk update massal assignment FASIH. Extension ini sendiri tidak berisi logika update apa pun. Kolom sheet dan proses per baris diambil dari file **`batch-automation.js`** yang di-import lewat panel. Contoh siap pakai ada di folder [`example - imported script/`](#contoh-script) dan di `../batch-automation.js` (kasus usaha OSS: Tidak Ditemukan → Ditemukan).
+Chrome extension bisa digunakan untuk mengupdate data secara massal pada Fasih-SM BPS
 
 ## Pasang
 1. Buka `chrome://extensions` (atau `edge://extensions`), lalu nyalakan **Developer mode**.
@@ -8,32 +8,28 @@ Ini panel sheet ala Google Sheets untuk update massal assignment FASIH. Extensio
 3. Reload tab `https://fasih-sm.bps.go.id` yang sudah login. Tombol hijau **⊞ Fasih Batch Extension** akan muncul di kanan bawah. Panel juga bisa dibuka lewat ikon extension.
 
 ## Menu
-Header panel berisi judul **Fasih Batch Extension** dan tiga menu di sampingnya:
+Pada header extension ada 3 menu:
 - **Automation**: update massal lewat script `batch-automation.js` (bagian [Pakai](#pakai)).
-- **Custom automation**: FASIH Sheet, sheet berbasis kuesioner HTML (bagian [Custom automation](#custom-automation)).
-- **Restore**: kembalikan assignment ke isi file backup `.json` (bagian [Restore](#restore)).
+- **Custom automation**: update massal variable yang dipilih secara custom (bagian [Custom automation](#custom-automation)).
+- **Restore**: restore assignment dari file backup `.json` (bagian [Restore](#restore)).
 
-Menu terakhir yang dibuka diingat. Selama proses berjalan, menu tidak bisa dipindah.
-
-## Pakai
-Bagian ini untuk menu **Automation**.
+## Automation
 1. Klik **Import script**, lalu pilih `batch-automation.js`. Judul, kolom sheet, dan opsi di toolbar langsung mengikuti isi script.
    Script terakhir disimpan dan dimuat ulang otomatis setiap kali halaman dibuka. Kalau file-nya diubah, import ulang.
-2. Klik sel **A1**, lalu tekan Ctrl+V dari Excel. Baris judul otomatis dilewati.
-   Sel merah artinya tidak valid. Arahkan kursor ke sel itu untuk melihat alasannya.
-3. Klik **Dry run**, lalu periksa kolom status, code_identity, dan keterangan.
-4. Uji 1 baris LIVE dulu dan buka hasilnya di UI. Setelah itu klik **Jalankan LIVE**.
+2. Copy paste data dari excel ke kolom sheet yang tersedia, jika ada error yang muncul bisa diperbaiki dulu.
+3. Klik **Dry run** untuk uji coba, lalu periksa kolom status, code_identity, dan keterangan.
+4. Klik **Jalankan LIVE** untuk eksekusi update data langsung ke Fasih-SM.
    Baris yang sudah **OK** tidak dikirim ulang. *Backup sebelum LIVE* (default tidak dicentang) mengunduh `fasih-backup-<id>-*.json`, yang bisa dipulihkan lewat menu **Restore** (atau `FASIH.restore`).
-5. Opsional: centang **Remark** (default nonaktif, hanya muncul kalau script punya `remarks`). Kolom remark ditambahkan setelah kolom script. Sel remark yang terisi ditulis sebagai catatan per-pertanyaan dengan `FASIH.setComment` setelah baris berhasil diproses (bukan LEWATI/GAGAL). Satu remark = satu submit, jadi versi record naik per remark. Teks yang sama persis di pertanyaan yang sama tidak ditulis dua kali. Saat dry run, remark hanya dicek, tidak dikirim.
+5. Opsional: centang **Remark** (default nonaktif, hanya muncul kalau script punya `remarks`). Cell remark yang terisi ditulis sebagai catatan per-pertanyaan dengan `FASIH.setComment` setelah baris berhasil diproses (bukan LEWATI/GAGAL). Untuk remark yang sama persis di pertanyaan yang sama tidak ditulis dua kali.
 
 Data sheet dan pengaturan disimpan per `id` script di localStorage FASIH. Kalau berganti script lalu kembali ke script sebelumnya, datanya masih ada.
 
 ## Restore
 Menu **Restore** mengembalikan assignment ke isi file backup (`fasih-backup-*.json` dari *Backup sebelum LIVE* atau `FASIH.backup`). Yang dikembalikan adalah seluruh jawaban, catatan (comment), dan kolom `data1`–`data10`. Perubahan apa pun setelah backup dibuat akan tertimpa.
 1. Klik **Pilih file backup**. Semua assignment di file tampil di sheet bersama code_identity, versi, dan jumlah jawaban saat backup dibuat.
-2. Kalau hanya sebagian yang perlu direstore, hapus `assignment_id` yang tidak perlu (pilih sel, lalu Delete). Cara lain: Ctrl+A, Delete, lalu tempel daftar `assignment_id` dari Excel. Id yang tidak ada di file ditandai merah.
-3. Klik **Dry run**. Kolom keterangan menunjukkan apa yang akan dikembalikan, misalnya `2 jawaban berubah, 1 jawaban dihapus, kolom data3, catatan`. Record yang sudah sama dengan backup berstatus **LEWATI** dan tidak dikirim, jadi versinya tidak naik.
-4. Klik **Restore LIVE**. *Backup kondisi sekarang sebelum LIVE* (default dicentang) lebih dulu mengunduh `fasih-backup-sebelum-restore-*.json`, supaya restore bisa dibatalkan dengan me-restore file itu.
+2. Kalau hanya sebagian yang perlu direstore, hapus `assignment_id` yang tidak perlu (pilih sel, lalu Delete).
+3. Klik **Dry run**. Kolom keterangan menunjukkan apa yang akan dikembalikan, misalnya `2 jawaban berubah, 1 jawaban dihapus, kolom data3, catatan`. Record yang sudah sama dengan backup berstatus **LEWATI** dan tidak dikirim.
+4. Klik **Restore LIVE**. *Backup kondisi sekarang sebelum LIVE* (default dicentang) lebih dulu mengunduh `fasih-backup-sebelum-restore-*.json`, supaya restore bisa dibatalkan dengan me-restore file tersebut.
 
 Catatan:
 - Record dengan survey period yang berbeda dari backup ditolak (**GAGAL**).
@@ -41,7 +37,7 @@ Catatan:
 
 ## Custom automation
 Menu **Custom automation** menjalankan FASIH Sheet (`custom/sheet.html`) di dalam panel. Halaman itu dimuat sebagai iframe `srcdoc`, sehingga berjalan di origin `fasih-sm.bps.go.id` dan memakai login yang sama: data assignment diambil langsung dari API tanpa skrip konsol.
-1. Pertama kali dibuka, pilih file kuesioner HTML (mis. `index.html` form FASIH). Template, validasi, alur skip, dan tampilan form diambil dari file itu. Kuesioner disimpan di browser dan langsung terbuka lagi berikutnya; **Ganti kuesioner** untuk memakai kuesioner lain.
+1. Pertama kali dibuka, pilih file kuesioner HTML (mis. `SE2026.html` form FASIH). Template, validasi, alur skip, dan tampilan form diambil dari file itu. Kuesioner disimpan di browser dan langsung terbuka lagi berikutnya; **Ganti kuesioner** untuk memakai kuesioner lain.
 2. Isi kolom pertama, **assignment_id**, lalu Enter. Data dimuat dari `/app/api/assignment-general/api/assignment/get-by-assignment-id?assignmentId=…` ke baris itu. Tempel satu kolom ID dari Excel di baris kosong terakhir untuk memuat banyak assignment sekaligus (ID yang sudah ada dilewati).
 3. Status per baris: *memuat…*, atau *gagal muat* (arahkan kursor untuk alasannya; Enter di sel assignment_id untuk mencoba lagi).
 4. Data sheet read-only. Ubah lewat **✎ Pilih variabel** (kolom Lama/Baru/Remark; toggle **Tampilkan data lama** default aktif dan **Tampilkan remark** default mati mengatur kolom Lama & Remark — remark yang sudah diisi tetap ikut walau kolomnya disembunyikan), lihat data terload lewat ikon mata (abu-biru) dan hasil update lewat ikon mata+pensil (biru berlatar biru muda; abu-abu bila belum ada perubahan) dalam tampilan kuesioner, dan ambil hasil lewat **Export ▾ → JSON** (format sama dengan respons `get-by-assignment-id`).

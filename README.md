@@ -10,11 +10,11 @@ Extension Chrome/Edge untuk **mengubah data Fasih-SM BPS secara massal** — ban
 
 ## Tiga menu
 
-| Menu | Untuk apa | Butuh script? |
-|---|---|---|
-| **Automation** | Update massal lewat script `batch-automation.js`. | Ya |
-| **Custom automation** | Pilih sendiri variabel yang mau diubah, langsung di sheet. | Tidak |
-| **Restore** | Kembalikan assignment ke isi file backup `.json`. | Tidak |
+| Menu | Untuk apa | Butuh script? | File yang dibutuhkan |
+|---|---|---|---|
+| **Automation** | Update massal lewat script `batch-automation.js`. | Ya | File script `batch-automation.js` |
+| **Custom automation** | Pilih sendiri variabel yang mau diubah, langsung di sheet. | Tidak | **File HTML kuesioner** (mis. `SE2026.html`) |
+| **Restore** | Kembalikan assignment ke isi file backup `.json`. | Tidak | File backup `.json` |
 
 Cara termudah adalah **Custom automation** (tanpa coding). Pakai **Automation** kalau kasusnya berulang dan sudah ada script-nya.
 
@@ -42,11 +42,11 @@ Pilih sendiri variabel yang mau diubah, isi nilai barunya, lalu kirim.
 
 Menu ini menjalankan **FASIH Sheet** (`custom/sheet.html`) sebagai iframe di dalam panel, pada origin `fasih-sm.bps.go.id` dengan login yang sama — jadi data diambil langsung dari API, tanpa paste ke Console.
 
-> ⚠ **Butuh file HTML kuesioner.** Menu ini tidak bisa dipakai tanpa file kuesioner HTML (mis. `SE2026.html` dari FASIH) — dari situlah template, validasi, alur skip, dan tampilan form diambil. Pilih file-nya saat pertama kali membuka menu (langkah 1); kuesioner lalu tersimpan di browser untuk seterusnya. Export script **mode engine** juga mensyaratkan kuesioner ini sudah di-import.
+> ⚠ **Butuh file HTML kuesioner.** Menu ini tidak bisa dipakai tanpa file kuesioner HTML (mis. `SE2026.html` dari FASIH) — dari situlah template, validasi, alur skip, dan tampilan form diambil. Contoh `SE2026.html` tersedia di folder [`example - imported questionnaire html/`](example%20-%20imported%20questionnaire%20html/). Pilih file-nya saat pertama kali membuka menu (langkah 1); kuesioner lalu tersimpan di browser untuk seterusnya. Export script **mode engine** juga mensyaratkan kuesioner ini sudah di-import.
 
 ### Langkah
 
-1. **Pilih kuesioner HTML** (mis. `SE2026.html`) saat pertama kali. Template, validasi, alur skip, dan tampilan form diambil dari situ. Kuesioner tersimpan di browser; pakai **Ganti kuesioner** untuk menggantinya.
+1. **Pilih kuesioner HTML** (mis. `SE2026.html`, tersedia di folder [`example - imported questionnaire html/`](example%20-%20imported%20questionnaire%20html/)) saat pertama kali. Template, validasi, alur skip, dan tampilan form diambil dari situ. Kuesioner tersimpan di browser; pakai **Ganti kuesioner** untuk menggantinya.
 2. **Isi assignment_id** di kolom pertama, lalu Enter — datanya dimuat ke baris itu. Mau banyak sekaligus? Tempel satu kolom ID dari Excel di baris kosong terakhir (ID yang sudah ada dilewati).
 3. Status muat per baris: *memuat…* atau *gagal muat* (arahkan kursor untuk alasannya; Enter di sel assignment_id untuk coba lagi).
 4. **Pilih variabel yang mau diubah** lewat **✎ Pilih variabel**.

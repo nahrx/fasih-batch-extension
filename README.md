@@ -42,6 +42,8 @@ Pilih sendiri variabel yang mau diubah, isi nilai barunya, lalu kirim.
 
 Menu ini menjalankan **FASIH Sheet** (`custom/sheet.html`) sebagai iframe di dalam panel, pada origin `fasih-sm.bps.go.id` dengan login yang sama — jadi data diambil langsung dari API, tanpa paste ke Console.
 
+> ⚠ **Butuh file HTML kuesioner.** Menu ini tidak bisa dipakai tanpa file kuesioner HTML (mis. `SE2026.html` dari FASIH) — dari situlah template, validasi, alur skip, dan tampilan form diambil. Pilih file-nya saat pertama kali membuka menu (langkah 1); kuesioner lalu tersimpan di browser untuk seterusnya. Export script **mode engine** juga mensyaratkan kuesioner ini sudah di-import.
+
 ### Langkah
 
 1. **Pilih kuesioner HTML** (mis. `SE2026.html`) saat pertama kali. Template, validasi, alur skip, dan tampilan form diambil dari situ. Kuesioner tersimpan di browser; pakai **Ganti kuesioner** untuk menggantinya.

@@ -7,7 +7,9 @@
  *
  *   FASIH_BATCH.register({
  *     id, name, description,
- *     columns:  [{ key, title?, type?: 'text'|'uuid'|'number'|'integer', required?, unique?, width?, mono?, trim? }],
+ *     columns:  [{ key, title?, type?: 'text'|'uuid'|'number'|'integer'|'select'|'date', required?, unique?, width?, mono?, trim? }],
+ *               type 'select': choices [{ value, label }] (dropdown; sel berisi label), multiple? (pisah ;)
+ *               type 'date'  : input 'date'|'datetime-local'|'time'|'month'|'week' (pemilih bawaan browser)
  *     idColumn: 'assignment_id',          // dipakai FASIH.init() & backup; default kolom uuid pertama
  *     options:  [{ key, label, type: 'checkbox'|'number'|'text'|'select', default, choices? }],
  *     remarks:  [{ dataKey, key?, title?, width? }],   // opsional; kolom remark muncul saat toggle Remark aktif
@@ -149,6 +151,20 @@
   .sheet td.active { outline: 2px solid #1a73e8; outline-offset: -2px; }
   .sheet td.editing { padding: 0 4px; outline: 2px solid #1a73e8; outline-offset: -2px; background: #fff; }
   .sheet td input { width: 100%; height: 100%; border: 0; outline: 0; padding: 0; font: inherit; background: #fff; color: inherit; }
+  .sheet td.dd { position: relative; padding-right: 16px; }
+  .sheet td.dd::after { content: '▾'; position: absolute; right: 4px; top: 0; line-height: 23px; color: #80868b; font-size: 11px; }
+  .sheet .dd-pop { position: fixed; z-index: 30; max-width: 480px; background: #fff; border: 1px solid #c0c0c0; border-radius: 6px;
+                   box-shadow: 0 6px 20px rgba(0,0,0,.18); display: flex; flex-direction: column; font-size: 13px; }
+  .sheet .dd-q { margin: 6px; padding: 4px 8px; border: 1px solid #c0c0c0; border-radius: 4px; font: inherit; outline: none; }
+  .sheet .dd-q:focus { border-color: #1a73e8; }
+  .sheet .dd-list { max-height: 220px; overflow: auto; padding: 0 4px 4px; }
+  .sheet .dd-it { padding: 4px 8px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+  .sheet .dd-it.hi { background: #e8f0fe; }
+  .sheet .dd-it.on { font-weight: 600; }
+  .sheet .dd-box { margin-right: 6px; }
+  .sheet .dd-none { padding: 6px 8px; color: #80868b; }
+  .sheet .dd-foot { display: flex; gap: 6px; align-items: center; padding: 6px; border-top: 1px solid #e2e3e3; font-size: 11px; color: #80868b; }
+  .sheet .dd-foot button { font: inherit; font-size: 12px; padding: 2px 8px; border: 1px solid #c0c0c0; border-radius: 4px; background: #fff; cursor: pointer; }
   .sheet .kb { position: fixed; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; resize: none; }
 </style>
 <button class="fab" title="Fasih Batch Extension">⊞ Fasih Batch Extension</button>
@@ -240,6 +256,11 @@
   function progress(done, total) { $('.progress div').style.width = total ? `${(done / total) * 100}%` : '0'; }
 
   /* ---------------- definisi script ---------------- */
+  // format nilai kolom type 'date' (sama dengan nilai <input type=...>)
+  const DATE_RE = {
+    date: /^\d{4}-\d{2}-\d{2}$/, 'datetime-local': /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?$/,
+    time: /^\d{2}:\d{2}(:\d{2})?$/, month: /^\d{4}-\d{2}$/, week: /^\d{4}-W\d{2}$/,
+  };
   function normalize(def) {
     if (!def || typeof def !== 'object') throw new Error('register() butuh objek definisi');
     if (!def.id) throw new Error('definisi butuh "id"');
@@ -252,10 +273,21 @@
       if (keys.has(col.key)) throw new Error(`kolom ganda: ${col.key}`);
       keys.add(col.key);
       const type = col.type || 'text';
-      if (!['text', 'uuid', 'number', 'integer'].includes(type)) throw new Error(`kolom ${col.key}: type "${type}" tidak dikenal`);
+      if (!['text', 'uuid', 'number', 'integer', 'select', 'date'].includes(type)) throw new Error(`kolom ${col.key}: type "${type}" tidak dikenal`);
+      const extra = {};
+      if (type === 'select') {
+        if (!Array.isArray(col.choices) || !col.choices.length) throw new Error(`kolom ${col.key}: type "select" butuh choices [{ value, label }]`);
+        extra.choices = col.choices.map((o) => (o && typeof o === 'object'
+          ? { value: String(o.value ?? o.label), label: String(o.label ?? o.value) } : { value: String(o), label: String(o) }));
+        extra.multiple = !!col.multiple;
+      }
+      if (type === 'date') {
+        extra.input = col.input || 'date';
+        if (!DATE_RE[extra.input]) throw new Error(`kolom ${col.key}: input "${extra.input}" tidak dikenal (date, datetime-local, time, month, week)`);
+      }
       return { key: col.key, title: col.title || col.key, type, required: !!col.required, unique: !!col.unique, editable: true,
-               width: col.width || (type === 'uuid' ? 290 : type === 'text' ? 240 : 120),
-               mono: col.mono ?? type === 'uuid', trim: col.trim ?? type !== 'text' };
+               width: col.width || (type === 'uuid' ? 290 : type === 'text' || type === 'select' ? 240 : type === 'date' ? 150 : 120),
+               mono: col.mono ?? type === 'uuid', trim: col.trim ?? type !== 'text', ...extra };
     });
     const idColumn = def.idColumn === null ? null
       : def.idColumn || (columns.find((c) => c.type === 'uuid') || {}).key || null;
@@ -403,6 +435,11 @@
         if (c.type === 'uuid' && !UUID.test(s)) mark(r, c.key, 'bukan UUID');
         if (c.type === 'number' && !Number.isFinite(Number(s.replace(',', '.')))) mark(r, c.key, 'bukan angka');
         if (c.type === 'integer' && !/^-?\d+$/.test(s)) mark(r, c.key, 'bukan bilangan bulat');
+        if (c.type === 'select') {
+          const bad = (c.multiple ? FasihSheet.splitMulti(s) : [s]).filter((x) => !FasihSheet.matchChoice(c.choices, x));
+          if (bad.length) mark(r, c.key, `"${bad.join('; ')}" tidak ada di pilihan (pilih dari dropdown)`);
+        }
+        if (c.type === 'date' && !DATE_RE[c.input].test(s)) mark(r, c.key, `format ${c.input === 'date' ? 'YYYY-MM-DD' : c.input === 'month' ? 'YYYY-MM' : c.input === 'time' ? 'HH:MM' : c.input === 'week' ? 'YYYY-Www' : 'YYYY-MM-DD HH:MM'}`);
         if (c.unique) {
           const k = s.toLowerCase(), m = seen[c.key];
           if (m.has(k)) { mark(r, c.key, `ganda dengan baris ${m.get(k) + 1}`); mark(m.get(k), c.key, `ganda dengan baris ${r + 1}`); }

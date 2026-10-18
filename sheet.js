@@ -4,6 +4,8 @@
  *   Ctrl+V                    tempel dari Excel/Sheets (TSV) mulai dari sel aktif
  *   Ctrl+C / Ctrl+X           salin / potong rentang sebagai TSV
  *   ketik / Enter / F2 / dblklik  edit sel; Enter/Tab simpan, Esc batal
+ *   kolom pilihan (choices)   dropdown: ketik untuk mencari / kode, panah + Enter pilih; multiple: Spasi centang, Enter simpan
+ *   kolom tanggal (input)     pemilih tanggal / waktu bawaan browser
  *   panah, Ctrl+panah, Tab    navigasi; Delete/Backspace kosongkan rentang; Ctrl+A semua
  * ==========================================================================*/
 
@@ -30,13 +32,22 @@ const FasihSheet = (() => {
     row.push(cell); rows.push(row);
     return rows;
   }
+  /* pilihan: cocok dengan kode, label, atau label tanpa kode ("1. Ya" -> "Ya") */
+  const norm = (x) => String(x ?? '').trim().toLowerCase();
+  const noCode = (x) => String(x ?? '').replace(/^\s*[\w.]+[.)]\s+/, '');
+  function matchChoice(choices, text) {
+    const w = norm(text);
+    if (!w) return null;
+    return choices.find((o) => norm(o.value) === w) || choices.find((o) => norm(o.label) === w) || choices.find((o) => norm(noCode(o.label)) === w) || null;
+  }
+  const splitMulti = (s) => String(s ?? '').split(/\s*[;|]\s*/).map((x) => x.trim()).filter(Boolean);
   const toTSV = (rows) => rows.map((r) => r.map((v) => {
     const s = String(v ?? '');
     return /[\t\n"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }).join('\t')).join('\n');
 
   class Sheet {
-    /** columns: [{ key, title, width, editable, mono, trim }] */
+    /** columns: [{ key, title, width, editable, mono, trim, choices?: [{value,label}], multiple?, input?: 'date'|'datetime-local'|'time'|'month'|'week' }] */
     constructor(container, { columns, minRows = 40, spareRows = 20, cellClass = () => '', cellTitle = () => '', onChange = () => {} }) {
       Object.assign(this, { cols: columns, minRows, spareRows, cellClass, cellTitle, onChange });
       this.rows = []; this.locked = false; this.edit = null; this.drag = false;
@@ -93,13 +104,14 @@ const FasihSheet = (() => {
     rowHTML(r) {
       const row = this.rows[r];
       return `<tr><th class="rn" data-r="${r}">${r + 1}</th>${this.cols.map((c, i) => {
-        const cls = [c.editable ? '' : 'ro', c.mono ? 'mono' : '', this.cellClass(row, c.key, r)].filter(Boolean).join(' ');
+        const cls = [c.editable ? '' : 'ro', c.mono ? 'mono' : '', c.editable && c.choices ? 'dd' : '', this.cellClass(row, c.key, r)].filter(Boolean).join(' ');
         const v = row[c.key], tip = this.cellTitle(row, c.key, r) || v;
         return `<td data-r="${r}" data-c="${i}" class="${cls}"${tip ? ` title="${esc(tip)}"` : ''}>${esc(v)}</td>`;
       }).join('')}</tr>`;
     }
     render() {
       if (this.edit) this.cancelEdit();
+      if (this.pick) this.closePick();
       const h = [];
       for (let r = 0; r < this.rows.length; r++) h.push(this.rowHTML(r));
       this.tbody.innerHTML = h.join('');
@@ -143,7 +155,9 @@ const FasihSheet = (() => {
     startEdit(initial) {
       const { r, c } = this.a, col = this.cols[c], t = this.td(r, c);
       if (this.locked || !col.editable || !t) return;
+      if (col.choices) return this.openPick(initial);
       const inp = document.createElement('input');
+      if (col.input) { inp.type = col.input; if (col.input === 'datetime-local') inp.step = '60'; initial = null; } // pemilih tanggal / waktu
       inp.value = initial != null ? initial : this.rows[r][col.key];
       t.textContent = ''; t.classList.add('editing'); t.appendChild(inp);
       this.edit = { r, c, inp, quick: initial != null };
@@ -173,6 +187,71 @@ const FasihSheet = (() => {
       const t = this.td(e.r, e.c);
       if (t) { t.classList.remove('editing'); t.textContent = this.rows[e.r][this.cols[e.c].key]; }
     }
+
+    /* ---------------- dropdown pilihan ---------------- */
+    openPick(initial) {
+      const { r, c } = this.a, col = this.cols[c], t = this.td(r, c);
+      if (!t) return;
+      this.closePick();
+      const multi = !!col.multiple;
+      const cur = this.rows[r][col.key];
+      const picked = new Set((multi ? splitMulti(cur) : [cur]).map((x) => matchChoice(col.choices, x)).filter(Boolean).map((o) => o.value));
+      const pop = document.createElement('div');
+      pop.className = 'dd-pop';
+      pop.innerHTML = `<input class="dd-q" placeholder="Cari kode / label…"><div class="dd-list"></div>`
+        + `<div class="dd-foot">${multi ? '<button data-dd="ok">Simpan</button>' : ''}<button data-dd="clear">Kosongkan</button><span>${multi ? 'Spasi: centang · Enter: simpan' : 'Enter: pilih'} · Esc: batal</span></div>`;
+      this.el.appendChild(pop);
+      const rect = t.getBoundingClientRect();
+      pop.style.left = `${Math.max(4, Math.min(rect.left, window.innerWidth - 300))}px`;
+      pop.style.minWidth = `${Math.max(220, rect.width)}px`;
+      const below = window.innerHeight - rect.bottom;
+      if (below < 260 && rect.top > below) pop.style.bottom = `${window.innerHeight - rect.top + 2}px`;
+      else pop.style.top = `${rect.bottom + 2}px`;
+      const q = pop.querySelector('.dd-q'), list = pop.querySelector('.dd-list');
+      let items = [], hi = 0;
+      const draw = () => {
+        const w = norm(q.value);
+        items = col.choices.filter((o) => !w || norm(o.value).startsWith(w) || norm(o.label).includes(w));
+        items.sort((a, b) => (norm(b.value) === w) - (norm(a.value) === w));   // kode persis di urutan pertama
+        hi = Math.min(hi, Math.max(0, items.length - 1));
+        list.innerHTML = items.map((o, i) => `<div class="dd-it${i === hi ? ' hi' : ''}${picked.has(o.value) ? ' on' : ''}" data-i="${i}">`
+          + `${multi ? `<span class="dd-box">${picked.has(o.value) ? '☑' : '☐'}</span>` : ''}${esc(o.label)}</div>`).join('') || '<div class="dd-none">Tidak ada pilihan yang cocok</div>';
+        const h = list.querySelector('.hi'); if (h) h.scrollIntoView({ block: 'nearest' });
+      };
+      const save = (val) => { this.closePick(); const changed = []; this.setCell(r, c, val, changed); this.commit(changed); this.select(r + 1, c); this.focus(); };
+      const saveMulti = () => save(col.choices.filter((o) => picked.has(o.value)).map((o) => o.label).join('; '));
+      const choose = (i) => {
+        const o = items[i]; if (!o) return;
+        if (!multi) return save(o.label);
+        if (picked.has(o.value)) picked.delete(o.value); else picked.add(o.value);
+        hi = i; draw();
+      };
+      q.addEventListener('input', () => { hi = 0; draw(); });
+      q.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'ArrowDown') { e.preventDefault(); hi = Math.min(hi + 1, items.length - 1); draw(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); hi = Math.max(hi - 1, 0); draw(); }
+        else if (e.key === ' ' && multi) { e.preventDefault(); choose(hi); }
+        else if (e.key === 'Enter') { e.preventDefault(); if (multi) saveMulti(); else choose(hi); }
+        else if (e.key === 'Tab') {
+          e.preventDefault();
+          if (multi) saveMulti();
+          else { this.closePick(); this.select(r, c + (e.shiftKey ? -1 : 1)); this.focus(); }
+        } else if (e.key === 'Escape') { e.preventDefault(); this.closePick(); this.focus(); }
+      });
+      ['keyup', 'keypress', 'paste', 'copy', 'cut'].forEach((ev) => q.addEventListener(ev, (e) => e.stopPropagation()));
+      pop.addEventListener('mousedown', (e) => { e.stopPropagation(); if (e.target !== q) e.preventDefault(); });
+      pop.addEventListener('click', (e) => {
+        const it = e.target.closest('.dd-it'); if (it) return choose(+it.dataset.i);
+        const b = e.target.closest('[data-dd]'); if (!b) return;
+        if (b.dataset.dd === 'ok') saveMulti(); else save('');
+      });
+      this.pick = { r, c, pop };
+      if (initial != null) q.value = initial;
+      draw();
+      q.focus();
+    }
+    closePick() { if (this.pick) { this.pick.pop.remove(); this.pick = null; } }
 
     /* ---------------- clipboard ---------------- */
     rangeTSV() {
@@ -209,6 +288,7 @@ const FasihSheet = (() => {
     }
 
     destroy() {
+      this.closePick();
       window.removeEventListener('mouseup', this.onUp);
       this.el.remove();
     }
@@ -219,6 +299,7 @@ const FasihSheet = (() => {
 
       this.el.addEventListener('mousedown', (e) => {
         if (e.button !== 0 || (this.edit && e.target === this.edit.inp)) return;
+        if (this.pick && !this.pick.pop.contains(e.target)) this.closePick();   // klik di luar dropdown = batal
         if (this.edit) this.commitEdit();
         const rn = e.target.closest('th.rn'), ch = e.target.closest('th.ch'), corner = e.target.closest('th.corner');
         const p = cellOf(e.target);
@@ -282,5 +363,7 @@ const FasihSheet = (() => {
     }
   }
 
+  Sheet.matchChoice = matchChoice;   // dipakai panel.js untuk validasi kolom pilihan
+  Sheet.splitMulti = splitMulti;
   return Sheet;
 })();

@@ -29,7 +29,7 @@ Update massal dengan menjalankan sebuah script.
 3. **Dry run** untuk uji coba — periksa kolom status, code_identity, dan keterangan.
 4. **Jalankan LIVE** untuk mengirim perubahan ke Fasih-SM.
    - Baris yang sudah **OK** tidak dikirim ulang.
-   - Centang **Backup sebelum LIVE** (default mati) untuk mengunduh `fasih-backup-<id>-*.json` lebih dulu — bisa dipulihkan lewat menu **Restore**.
+   - Centang **Backup sebelum LIVE** (default mati) untuk mengunduh `fasih-backup-<id>-*.json` lebih dulu — bisa dipulihkan lewat menu **Restore**. Backup mengambil record satu per satu dengan jeda 3 detik antar-request. Progres tampil per record (mis. `Backup 12/100 — <assignment_id>`); **Stop** menghentikan backup — file tidak diunduh dan tidak ada yang dikirim.
 5. Opsional — **Remark** (default mati, hanya muncul kalau script punya `remarks`): isi cell remark ditulis sebagai catatan per-pertanyaan setelah baris berhasil (bukan LEWATI/GAGAL). Remark yang sama persis di pertanyaan yang sama tidak ditulis dua kali.
 
 > Data sheet dan pengaturan disimpan per `id` script (di localStorage). Ganti script lalu kembali lagi — datanya masih ada.
@@ -66,7 +66,7 @@ Menu ini menjalankan **FASIH Sheet** (`custom/sheet.html`) sebagai iframe di dal
    - Ambil hasil: **Export ▾ → JSON** (format sama dengan respons `get-by-assignment-id`).
 6. **Kirim perubahan**: **Dry run** untuk uji coba (keterangan menampilkan jumlah jawaban baru/diubah/dihapus dan catatan sebelum → sesudah), **Kirim ke FASIH** (LIVE) untuk langsung update data ke Fasih SM secara otomatis.
    - **Jeda kirim** antar-record default 5000 ms (berlaku untuk dry run dan LIVE).
-   - Pilihan dialog: lewati baris yang hasil update-nya masih error validasi (default aktif), dan **Backup kondisi server sebelum LIVE** (default aktif, bisa dipulihkan lewat **Restore**).
+   - Pilihan dialog: lewati baris yang hasil update-nya masih error validasi (default aktif), dan **Backup kondisi server sebelum LIVE** (default mati, jeda 3 detik antar-request, bisa dipulihkan lewat **Restore**). Progres backup tampil di bawah tabel dialog (mis. `Backup 12/100 — <assignment_id>`); **Stop** menghentikan backup — file tidak diunduh dan tidak ada yang dikirim.
    - Baris yang berhasil dimuat ulang dari FASIH, sehingga perubahannya jadi data dasar baru.
    - Kalau masih ada assignment_id yang antri/sedang dimuat, muncul dialog menunggu lalu mulai otomatis setelah semua selesai. Esc membatalkan; baris yang gagal dimuat tidak ikut dikirim.
 
@@ -143,7 +143,9 @@ Library submit khusus Custom automation, tersedia sebagai `window.FASIH_CUSTOM` 
 await FASIH_CUSTOM.submit(item)                          // dry run: { nChanges, changes[], commentChanged, version, ... }
 await FASIH_CUSTOM.submit(item, { dryRun: false })       // kirim
 await FASIH_CUSTOM.submitBatch(items, { dryRun: false, delayMs: 1500 })
-await FASIH_CUSTOM.backup([id1, id2])                    // format backup FASIH / menu Restore
+await FASIH_CUSTOM.backup([id1, id2])                    // format backup FASIH / menu Restore; jeda 3 detik antar-request
+await FASIH_CUSTOM.backup(ids, nama, { delayMs: 5000, onProgress: (n, total, id) => {}, shouldStop: () => false })
+                                                          // ubah jeda, pantau progres, hentikan (hasil null, file tidak diunduh)
 await FASIH_CUSTOM.myInfo(surveyPeriodId)                // user login (username = pengirim remark baru)
 const api = await FASIH_CUSTOM.engine(idKuesioner)       // engine kuesioner (sheet tersembunyi), dipakai script mode engine
 await api.compute({ response, keys, values, remarks, rosterNo })   // -> { envelope, galat, errors, ignored }
@@ -167,7 +169,7 @@ Mengembalikan assignment ke isi file backup (`fasih-backup-*.json` dari *Backup 
 1. **Pilih file backup**. Semua assignment di file tampil di sheet beserta code_identity, versi, dan jumlah jawaban saat backup dibuat.
 2. Mau sebagian saja? Hapus `assignment_id` yang tak perlu (pilih sel, lalu Delete).
 3. **Dry run** — kolom keterangan menunjukkan apa yang akan dikembalikan, mis. `2 jawaban berubah, 1 jawaban dihapus, kolom data3, catatan`. Record yang sudah sama dengan backup → **LEWATI**.
-4. **Restore LIVE**. **Backup kondisi sekarang sebelum LIVE** (default aktif) lebih dulu mengunduh `fasih-backup-sebelum-restore-*.json`, supaya restore bisa dibatalkan.
+4. **Restore LIVE**. **Backup kondisi sekarang sebelum LIVE** (default mati; centang dulu kalau restore ingin bisa dibatalkan, jeda 3 detik antar-request) lebih dulu mengunduh `fasih-backup-sebelum-restore-*.json`, supaya restore bisa dibatalkan. Progres backup tampil per record; **Stop** menghentikan backup — file tidak diunduh dan tidak ada yang di-restore.
 
 Catatan:
 - Record dengan survey period berbeda dari backup ditolak (**GAGAL**).

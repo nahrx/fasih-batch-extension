@@ -254,6 +254,11 @@
   /* ---------------- status bar ---------------- */
   function msg(text, kind = '') { const m = $('.msg'); m.textContent = text; m.className = 'msg ' + kind; m.title = text; }
   function progress(done, total) { $('.progress div').style.width = total ? `${(done / total) * 100}%` : '0'; }
+  /* Opsi FASIH.backup: progres per record di pesan & progress bar, tombol Stop menghentikan backup */
+  const backupOpts = () => ({
+    onProgress: (n, total, id) => { msg(`Backup ${n}/${total} — ${id}`); progress(n - 1, total); },
+    shouldStop: () => abort,
+  });
 
   /* ---------------- definisi script ---------------- */
   // format nilai kolom type 'date' (sama dengan nilai <input type=...>)
@@ -551,7 +556,9 @@
       }
       if (!dry && S.backup && m.idColumn) {
         msg(`Membuat backup ${rows.length} record…`);
-        await F().backup(rows.map((x) => x[m.idColumn]), `fasih-backup-${m.id}-${stamp()}.json`);
+        const bak = await F().backup(rows.map((x) => x[m.idColumn]), `fasih-backup-${m.id}-${stamp()}.json`, backupOpts());
+        progress(0, targets.length);
+        if (!bak) return msg('Backup dihentikan — file tidak diunduh, tidak ada yang dikirim.');
       }
       for (let i = 0; i < targets.length && !abort; i++) {
         const { r, item, remarks } = targets[i];
@@ -597,8 +604,12 @@
      File backup tidak disimpan di localStorage (bisa beberapa MB) — reload halaman = pilih file lagi.
      Sebelum restore, isi backup dibandingkan dengan kondisi sekarang; record yang sudah sama
      tidak dikirim (LEWATI) supaya versinya tidak naik percuma. */
-  const RBASE = { jeda: 1500, backup: true };
-  const RS = { ...RBASE, ...LS.get(K.restore, {}) };
+  const RBASE = { jeda: 1500, backup: false };
+  const RS = (() => {
+    const saved = LS.get(K.restore, {});
+    if (saved._v !== SETTINGS_V) delete saved.backup;      // pengaturan versi lama selalu menyimpan backup: true (default lama)
+    return { ...RBASE, ...saved, _v: SETTINGS_V };
+  })();
   const RCOLS = [
     { key: 'assignment_id', title: 'assignment_id', width: 290, editable: true, mono: true, trim: true },
     { key: 'code', title: 'code_identity (backup)', width: 210, mono: true },
@@ -758,7 +769,9 @@
     try {
       if (!dry && RS.backup) {
         msg(`Membuat backup kondisi sekarang ${targets.length} record…`);
-        await F().backup(targets.map((x) => x.it.assignmentId), `fasih-backup-sebelum-restore-${stamp()}.json`);
+        const bak = await F().backup(targets.map((x) => x.it.assignmentId), `fasih-backup-sebelum-restore-${stamp()}.json`, backupOpts());
+        progress(0, targets.length);
+        if (!bak) return msg('Backup dihentikan — file tidak diunduh, tidak ada yang di-restore.');
       }
       for (let i = 0; i < targets.length && !abort; i++) {
         const { r, it } = targets[i];

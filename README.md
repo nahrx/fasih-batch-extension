@@ -73,7 +73,8 @@ Menu ini menjalankan **FASIH Sheet** (`custom/sheet.html`) sebagai iframe di dal
 ### Variabel roster
 
 - Hanya bisa dipilih bersama variabel dari roster yang sama (tidak bisa dicampur dengan variabel utama atau roster lain; yang tak bisa dipilih tampil pudar).
-- Memilih variabel roster menambah kolom **No roster** setelah assignment_id — nomor urut item roster yang diubah di baris itu (roster bertingkat: `1.2`). Info bar menampilkan daftar item yang ada.
+- Memilih variabel roster menambah kolom **No roster** setelah assignment_id — nomor urut item roster yang diubah di baris itu (roster bertingkat: `1.2`). Info bar menampilkan daftar item yang ada (`No · nama (key)`).
+  No roster adalah **nomor urut**, bukan suffix `#` di dataKey. Key item roster tidak selalu berurutan: misalnya anggota keluarga prelist `#1`, lalu tambahan `#101`, `#102`, dan seterusnya. Nomor urut dibaca dari variabel nomor urut di dalam roster (misalnya `no_urut_kk_var#<key>`), lalu dipetakan ke key aslinya. Contohnya, No roster `2` → `#101` → `ijazah#101`. Roster tanpa variabel nomor urut memakai posisi item (1, 2, 3, …). Key asli juga bisa diisi langsung dengan awalan `#`, misalnya `#101`. Pemetaan yang sama dipakai oleh script hasil Export, baik mode engine maupun mode langsung.
 - Satu assignment boleh diisi di beberapa baris dengan No roster berbeda (data disalin dari baris yang sudah dimuat, tanpa permintaan ulang). Perubahannya digabung jadi satu dokumen saat View hasil update, Export JSON, dan Kirim ke FASIH. Mengganti No roster memindahkan perubahan baris itu ke item baru.
 - Sub-sheet roster (tombol ▦) sekarang hanya untuk melihat data.
 

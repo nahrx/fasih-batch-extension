@@ -76,6 +76,12 @@ Menu ini menjalankan **FASIH Sheet** (`custom/sheet.html`) sebagai iframe di dal
 - Memilih variabel roster menambah kolom **No roster** setelah assignment_id — nomor urut item roster yang diubah di baris itu (roster bertingkat: `1.2`). Info bar menampilkan daftar item yang ada (`No · nama (key)`).
   No roster adalah **nomor urut**, bukan suffix `#` di dataKey. Key item roster tidak selalu berurutan: misalnya anggota keluarga prelist `#1`, lalu tambahan `#101`, `#102`, dan seterusnya. Nomor urut dibaca dari variabel nomor urut di dalam roster (misalnya `no_urut_kk_var#<key>`), lalu dipetakan ke key aslinya. Contohnya, No roster `2` → `#101` → `ijazah#101`. Roster tanpa variabel nomor urut memakai posisi item (1, 2, 3, …). Key asli juga bisa diisi langsung dengan awalan `#`, misalnya `#101`. Pemetaan yang sama dipakai oleh script hasil Export, baik mode engine maupun mode langsung.
 - Satu assignment boleh diisi di beberapa baris dengan No roster berbeda (data disalin dari baris yang sudah dimuat, tanpa permintaan ulang). Perubahannya digabung jadi satu dokumen saat View hasil update, Export JSON, dan Kirim ke FASIH. Mengganti No roster memindahkan perubahan baris itu ke item baru.
+- Variabel **foto, tanda tangan, dan file** bisa dipilih di Pilih variabel (bertanda "⊘ abaikan galat"). Nilainya tidak bisa diubah di sheet, karena media diunggah oleh aplikasi FASIH. Sebagai gantinya, variabel itu mendapat kolom **Abaikan · <label>** di blok UPDATE DATA. Variabel ini boleh dipilih bersama variabel utama maupun variabel roster.
+  - Cara menandai: Enter atau klik ganda, ketik/tempel `Ya`, dan Del untuk membatalkan.
+  - Baris yang ditandai tidak menghitung galat pada variabel itu (termasuk semua item roster-nya) di status baris, View, Export JSON, Validasi, dan Kirim ke FASIH. Opsi "Lewati baris yang hasil update-nya masih ada galat" tidak menahan baris itu karena galat tersebut. Galat yang diabaikan tetap terlihat sebagai "(+n diabaikan)" atau "⊘".
+  - Tanda berlaku per assignment: kalau salah satu baris assignment yang sama ditandai, galatnya diabaikan untuk seluruh assignment itu.
+  - Data foto/ttd/file tetap dikirim apa adanya. Yang diabaikan hanya galatnya; kekosongannya tidak diperbaiki.
+  - Script Export **mode engine** mendapat kolom `abaikan_<variabel>` (isi `Ya`). Mode langsung tidak menghitung galat, jadi variabel ini dilewati.
 - Sub-sheet roster (tombol ▦) sekarang hanya untuk melihat data.
 
 ### Export ke script Automation

@@ -29,11 +29,11 @@
  * Kode script dijalankan dengan AsyncFunction (butuh 'unsafe-eval' di CSP halaman);
  * kalau CSP menolak, dijalankan lewat chrome.userScripts (bridge.js + background.js).
  *
- * Menu di header: "Automation" (sheet + script di atas), "Restore" (kembalikan
- * assignment ke isi file backup .json dari FASIH.backup / "Backup sebelum LIVE"), dan
- * "Custom automation" (FASIH Sheet: import kuesioner HTML, isi assignment_id -> data dimuat
- * dari get-by-assignment-id; halaman custom/sheet.html dijalankan di iframe srcdoc supaya
- * berjalan di origin FASIH dan memakai login yang sama).
+ * Menu di header (urut): "Custom automation" (menu default saat halaman dibuka; FASIH Sheet:
+ * import kuesioner HTML, isi assignment_id -> data dimuat dari get-by-assignment-id; halaman
+ * custom/sheet.html dijalankan di iframe srcdoc supaya berjalan di origin FASIH dan memakai login
+ * yang sama), "Script-based automation" (sheet + script di atas), dan "Restore" (kembalikan
+ * assignment ke isi file backup .json dari FASIH.backup / "Backup sebelum LIVE").
  * ==========================================================================*/
 
 (() => {
@@ -47,7 +47,7 @@
     del(k) { try { localStorage.removeItem(k); } catch {} },
   };
   const K = { code: 'fasih-batch:code', rows: (id) => `fasih-batch:rows:${id}`, settings: (id) => `fasih-batch:settings:${id}`,
-              view: 'fasih-batch:view', restore: 'fasih-batch:restore-settings' };
+              restore: 'fasih-batch:restore-settings' };
 
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const BASE = { jeda: 5000, backup: false, remark: false };
@@ -172,8 +172,8 @@
   <header>
     <span class="logo">⊞</span><span class="title">Fasih Batch Extension</span>
     <nav class="menu">
-      <button data-view="auto" title="Update massal lewat script batch-automation.js">Automation</button>
       <button data-view="custom" title="FASIH Sheet: import kuesioner HTML, isi assignment_id untuk memuat data dari FASIH">Custom automation</button>
+      <button data-view="auto" title="Update massal lewat script batch-automation.js">Script-based automation</button>
       <button data-view="restore" title="Kembalikan assignment ke isi file backup .json">Restore</button>
     </nav>
     <span class="sub"></span>
@@ -804,8 +804,7 @@
     if (running) return;
     if (sheet && sheet.edit) sheet.commitEdit();
     if (rsheet && rsheet.edit) rsheet.commitEdit();
-    view = v === 'restore' || v === 'custom' ? v : 'auto';
-    LS.set(K.view, view);
+    view = v === 'restore' || v === 'auto' ? v : 'custom';
     root.querySelectorAll('[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
     $('.v-auto').hidden = view !== 'auto'; $('.v-restore').hidden = view !== 'restore'; $('.hdr-auto').hidden = view !== 'auto';
     $('.v-custom').hidden = view !== 'custom';
@@ -988,7 +987,7 @@
 
   /* ---------------- muat ulang script terakhir ---------------- */
   buildUI();
-  setView(LS.get(K.view, 'auto'));
+  setView('custom');                                    // selalu dibuka di menu Custom automation
   const saved = LS.get(K.code, null);
   if (saved && saved.code) {
     runCode(saved.code, saved.name).catch((e) => {

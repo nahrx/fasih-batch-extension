@@ -12,15 +12,15 @@ Extension Chrome/Edge untuk **mengubah data Fasih-SM BPS secara massal** — ban
 
 | Menu | Untuk apa | Butuh script? | File yang dibutuhkan |
 |---|---|---|---|
-| **Automation** | Update massal lewat script `batch-automation.js`. | Ya | File script `batch-automation.js` |
 | **Custom automation** | Pilih sendiri variabel yang mau diubah, langsung di sheet. | Tidak | **File HTML kuesioner** (mis. `SE2026.html`) |
+| **Script-based automation** | Update massal lewat script `batch-automation.js`. | Ya | File script `batch-automation.js` |
 | **Restore** | Kembalikan assignment ke isi file backup `.json`. | Tidak | File backup `.json` |
 
-Cara termudah adalah **Custom automation** (tanpa coding). Pakai **Automation** kalau kasusnya berulang dan sudah ada script-nya.
+Panel selalu terbuka di menu **Custom automation**, cara termudah (tanpa coding). Pakai **Script-based automation** kalau kasusnya berulang dan sudah ada script-nya.
 
 ---
 
-## Automation
+## Script-based automation
 
 Update massal dengan menjalankan sebuah script.
 
@@ -84,13 +84,13 @@ Menu ini menjalankan **FASIH Sheet** (`custom/sheet.html`) sebagai iframe di dal
   - Script Export **mode engine** mendapat kolom `abaikan_<variabel>` (isi `Ya`). Mode langsung tidak menghitung galat, jadi variabel ini dilewati.
 - Sub-sheet roster (tombol ▦) sekarang hanya untuk melihat data.
 
-### Export ke script Automation
+### Export ke script (menu Script-based automation)
 
-**Export ▾ → Script** membuat `batch-automation - <nama>.js` dari variabel terpilih, untuk di-import ke menu **Automation**.
+**Export ▾ → Script** membuat `batch-automation - <nama>.js` dari variabel terpilih, untuk di-import ke menu **Script-based automation**.
 
 Kolom script: `assignment_id` (+ `no_roster` di mode roster), satu kolom per variabel, dan `remark_<variabel>` untuk variabel yang boleh diberi remark. Sel kosong = tidak diubah.
 
-Di sheet Automation, tiap variabel tampil sesuai tipenya:
+Di sheet Script-based automation, tiap variabel tampil sesuai tipenya:
 - pilihan tetap (radio/select/rating) → **dropdown**
 - checkbox / multi → **dropdown multi**
 - centang tunggal / toggle → **dropdown Ya/Tidak**
@@ -98,13 +98,13 @@ Di sheet Automation, tiap variabel tampil sesuai tipenya:
 - pilihan beropsi dari isian lain tapi berupa daftar tetap (mis. `ada_keluarga` dari `kode_keluarga_new`, `ada_bang_usaha`, `kode_bang`, roster `keberadaan_usaha`) → dropdown berisi **gabungan semua opsi yang mungkin**; yang berlaku untuk assignment tertentu dicek engine saat diproses (tidak berlaku → GAGAL "tidak ada di pilihan")
 - pilihan beropsi dari data (nama anggota, principal — mis. `nama_info_list`, `pilih_umkm_sls`) atau dari lookup → tetap **diketik** (kode atau label)
 
-**Salin data** / **Download data (.tsv)** berisi perubahan yang sudah diisi di sheet beserta baris judul, siap ditempel di sel A1 sheet Automation.
+**Salin data** / **Download data (.tsv)** berisi perubahan yang sudah diisi di sheet beserta baris judul, siap ditempel di sel A1 sheet Script-based automation.
 
 **Dua mode export:**
 
 - **Dengan engine kuesioner** (default, disarankan) — tiap baris dihitung dengan engine yang sama dengan Custom automation: skip/enableCondition (isian yang jadi ter-skip ikut dihapus), validasi (galat seperti Ringkasan kuesioner), variabel hitungan, dan roster — lalu dikirim lewat `FASIH_CUSTOM.submit`. Isi sel sama seperti kolom **Baru**. Opsi *Lewati jika hasil update masih galat* (default aktif) menahan baris yang melanggar validasi; baris yang semua perubahannya jatuh di isian ter-skip → LEWATI; item roster yang tak ada → GAGAL.
   *Syarat:* kuesioner yang sama sudah di-import di Custom automation pada browser itu, dan `lib/custom_console.js` versi 1.2.0+. Kalau versi kuesioner beda dengan saat script dibuat, keterangan baris diberi peringatan.
-- **Langsung (`FASIH.patch`)** — nilai ditulis apa adanya tanpa engine (tidak butuh kuesioner HTML). Opsi berupa kode atau label (`1`, `1. Ya`, `Ya`; multi dipisah `;`), angka, Ya/Tidak, geotag `lat, lon` / `lat, lon, accuracy` (desimal titik, lewat `FASIH.geotag`), atau teks. **Tidak** membersihkan isian ter-skip dan **tidak** menjalankan validasi — pakai untuk perubahan sederhana, dan selalu Dry run dulu. Kolom remark memakai toggle Remark di menu Automation (`FASIH.setComment`).
+- **Langsung (`FASIH.patch`)** — nilai ditulis apa adanya tanpa engine (tidak butuh kuesioner HTML). Opsi berupa kode atau label (`1`, `1. Ya`, `Ya`; multi dipisah `;`), angka, Ya/Tidak, geotag `lat, lon` / `lat, lon, accuracy` (desimal titik, lewat `FASIH.geotag`), atau teks. **Tidak** membersihkan isian ter-skip dan **tidak** menjalankan validasi — pakai untuk perubahan sederhana, dan selalu Dry run dulu. Kolom remark memakai toggle Remark di menu Script-based automation (`FASIH.setComment`).
 
 <details>
 <summary><b>Variabel yang tidak bisa diekspor ke script</b> (contoh dari template SE2026 v7.1.2)</summary>
@@ -129,7 +129,7 @@ Urutan toolbar kanan: **Dry run**, **Kirim ke FASIH**, Jeda kirim (default 5000 
 
 Sheet menampilkan minimal 40 baris dan selalu menyisakan 20 baris kosong untuk assignment_id baru. Butuh lebih? Di bawah tabel ada **Tambah [20] baris lagi di bagian bawah** (jumlah bisa diubah). Jumlah baris diingat browser, kembali ke 40 setelah **Hapus semua**.
 
-**Salin & tempel** (sama seperti menu Automation):
+**Salin & tempel** (sama seperti menu Script-based automation):
 - Pilih sel/rentang: klik, drag, Shift+klik, Shift+panah; klik judul kolom = satu kolom; nomor baris = satu baris; Ctrl+A = semua.
 - Klik hanya memilih. Untuk mengisi/mengubah: klik ganda, Enter, F2, atau langsung ketik.
 - Ctrl+C/Ctrl+X menyalin rentang sebagai TSV; Ctrl+V menempel dari Excel/Sheets mulai sel aktif (satu nilai ke rentang = isi seluruh rentang; baris judul dilewati).
@@ -261,7 +261,7 @@ Acuan field:
 | `manifest.json` | MV3; content script MAIN world + bridge |
 | `lib/general_console.js` | FASIH (getAssignment, patch, update, backup, restore, ...) |
 | `sheet.js` | komponen grid (`FasihSheet`) |
-| `panel.js` | panel generik (menu Automation & Restore), `window.FASIH_BATCH.register`, import, validasi, proses berurutan, restore dari file backup |
+| `panel.js` | panel generik (menu Custom automation, Script-based automation & Restore), `window.FASIH_BATCH.register`, import, validasi, proses berurutan, restore dari file backup |
 | `bridge.js` / `background.js` | toggle lewat ikon, URL template, cadangan `chrome.userScripts` |
 | `templates/batch-automation.template.js` | template yang diunduh lewat tombol **Download template** |
 | `example - imported script/` | contoh script siap import (lihat [Contoh script](#contoh-script)) |

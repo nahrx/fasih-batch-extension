@@ -125,6 +125,8 @@ Mode engine hanya terkena kelompok 1; mode langsung terkena keduanya.
 - Daftar teks (tiap item membentuk baris roster) — `tambah_dtsen`, `nama_usaha_tambahan`, `list_ak_tinggal`.
 
 Kelompok 2 tetap ikut di **mode engine**, dan tetap bisa diubah langsung di Custom automation (kolom **Baru** → **Kirim ke FASIH**).
+
+Pilihan dari tabel lookup FASIH (misalnya `kbli`) diambil dari API lookup FASIH (`/app/api/lookup/api/v1/collections/<id>/filter`) dengan login yang sedang dipakai. Satu koleksi dimuat sekali, lalu disaring menurut pertanyaan induknya. Kalau gagal, dropdown menampilkan "Lookup master tidak tersedia" beserta penyebabnya (misalnya HTTP 403 = belum login), dan kode masih bisa diketik manual. Nilai yang ditempel dari Excel diperiksa terhadap master lebih dulu: kode yang tidak ada di master ditolak ("tidak ada di pilihan"), dan kalau master gagal dimuat, nilai tempelan juga ditolak beserta alasannya. Sheet yang dibuka di luar halaman FASIH memakai server lookup lokal `localhost:3310`.
 </details>
 
 ### Toolbar & sheet
